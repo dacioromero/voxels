@@ -6,12 +6,13 @@ using UnityEditor;
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer)), DisallowMultipleComponent]
 public class TerrainGenerator : MonoBehaviour
 {
+    [Range(0, 1)]
     public float isolevel = 1;
     public float noiseScale;
 
     public int octaves;
     [Range(0, 1)]
-    public float persistance;
+    public float persistence;
     public float lacunarity;
 
     public int seed;
@@ -25,16 +26,22 @@ public class TerrainGenerator : MonoBehaviour
         Debug.Log("Generating");
 
         VoxelChunk chunk = new VoxelChunk();
-        chunk.GenerateTerrain(dimensions, seed, noiseScale, octaves, persistance, lacunarity, offset);
+        chunk.GenerateTerrain(dimensions, seed, noiseScale, octaves, persistence, lacunarity, offset);
 
-        GetComponent<MeshFilter>().sharedMesh = GetComponent<MeshCollider>().sharedMesh = GenerateMesh(chunk.voxels); ;
-        GetComponent<MeshRenderer>().sharedMaterial.mainTexture = GenerateTexture(chunk.NoiseMap);
+        GetComponent<MeshFilter>().sharedMesh = GetComponent<MeshCollider>().sharedMesh = GenerateMesh(chunk.voxels);
+
+        Material material = new Material(Shader.Find("Default-Diffuse"))
+        {
+            mainTexture = GenerateTexture(chunk.NoiseMap)
+        };
+
+        GetComponent<MeshRenderer>().material = material;
     }
 
     Texture2D GenerateTexture(float[,] noiseMap)
     {
         string id = "Terrain" + System.DateTime.UtcNow.ToFileTime().ToString();
-        Color[] colourMap = new Color[dimensions.x * dimensions.z];
+        Color[] colorMap = new Color[dimensions.x * dimensions.z];
 
         for (int y = 0; y < dimensions.z; y++)
         {
@@ -46,14 +53,15 @@ public class TerrainGenerator : MonoBehaviour
                 {
                     if (currentHeight <= regions[i].height)
                     {
-                        colourMap[y * dimensions.x + x] = regions[i].colour;
+                        float random = Random.Range(0.95f, 1.05f);
+                        colorMap[y * dimensions.x + x] = regions[i].color * random;
                         break;
                     }
                 }
             }
         }
 
-        Texture2D terrainTexture = TextureGenerator.TextureFromColourMap(colourMap, dimensions.x, dimensions.z);
+        Texture2D terrainTexture = TextureGenerator.TextureFromColourMap(colorMap, dimensions.x, dimensions.z);
 
         AssetDatabase.CreateAsset(terrainTexture, "Assets/Terrain Data/" + id + " Texture.asset");
         AssetDatabase.SaveAssets();
@@ -61,7 +69,7 @@ public class TerrainGenerator : MonoBehaviour
         return (Texture2D)AssetDatabase.LoadAssetAtPath("Assets/Terrain Data/" + id + " Texture.asset", typeof(Texture2D));
     }
 
-    Mesh GenerateMesh(bool[,,] voxels)
+    Mesh GenerateMesh(float[,,] voxels)
     {
         string id = "Terrain" + System.DateTime.UtcNow.ToFileTime().ToString();
         Dictionary<Vector3, int> vertexDictionary = new Dictionary<Vector3, int>();
@@ -78,25 +86,25 @@ public class TerrainGenerator : MonoBehaviour
                     try
                     {
                         gridcell.val = new float[] {
-                            voxels[    x,     y,     z] ? 1 : 0,
-                            voxels[    x,     y, 1 + z] ? 1 : 0,
-                            voxels[1 + x,     y, 1 + z] ? 1 : 0,
-                            voxels[1 + x,     y,     z] ? 1 : 0,
+                            voxels[    x,     y,     z],
+                            voxels[    x,     y, 1 + z],
+                            voxels[1 + x,     y, 1 + z],
+                            voxels[1 + x,     y,     z],
 
-                            voxels[    x, 1 + y,     z] ? 1 : 0,
-                            voxels[    x, 1 + y, 1 + z] ? 1 : 0,
-                            voxels[1 + x, 1 + y, 1 + z] ? 1 : 0,
-                            voxels[1 + x, 1 + y,     z] ? 1 : 0,
+                            voxels[    x, 1 + y,     z],
+                            voxels[    x, 1 + y, 1 + z],
+                            voxels[1 + x, 1 + y, 1 + z],
+                            voxels[1 + x, 1 + y,     z],
                         };
                     }
 
                     catch
                     {
                         gridcell.val = new float[] {
-                            voxels[    x,     y,     z] ? 1 : 0,
-                            voxels[    x,     y, 1 + z] ? 1 : 0,
-                            voxels[1 + x,     y, 1 + z] ? 1 : 0,
-                            voxels[1 + x,     y,     z] ? 1 : 0,
+                            voxels[    x,     y,     z],
+                            voxels[    x,     y, 1 + z],
+                            voxels[1 + x,     y, 1 + z],
+                            voxels[1 + x,     y,     z],
 
                             0,
                             0,
@@ -182,22 +190,6 @@ public struct MapDimensions
     public int y;
     public int z;
 
-    public Vector3 vector3
-    {
-        get
-        {
-            return new Vector3(x, y, z);
-        }
-    }
-
-    public Vector2 vector2
-    {
-        get
-        {
-            return new Vector2(x, z);
-        }
-    }
-
     public MapDimensions(int _x, int _y, int _z)
     {
         x = _x;
@@ -217,5 +209,5 @@ public struct TerrainType
 {
     public string name;
     public float height;
-    public Color colour;
+    public Color color;
 }
