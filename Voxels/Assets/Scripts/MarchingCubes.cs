@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 // Credit http://paulbourke.net/geometry/polygonise/
@@ -21,22 +22,32 @@ public class MarchingCubes
                 Vector3.zero, Vector3.zero, Vector3.zero
             };
         }
+
+        public Triangle(Vector3[] points)
+        {
+            p = points;
+        }
+
+        public Triangle(Vector3 p1, Vector3 p2, Vector3 p3)
+        {
+            p = new Vector3[] { p1, p2, p3 };
+        }
     };
 
     [System.Serializable]
     public class Gridcell
     {
-        public Vector3[] p { get { return points; } }
-        Vector3[] points;
+        public Vector3[] p { get; private set; }
+
         public float[] val;
 
         public Gridcell(float[] _vals, Vector3 _offset)
         {
             val = _vals;
             Init();
-            for (short i = 0; i < points.Length; i++)
+            for (int i = 0; i < p.Length; i++)
             {
-                points[i] += _offset;
+                p[i] += _offset;
             }
         }
 
@@ -54,7 +65,7 @@ public class MarchingCubes
 
         void Init()
         {
-            points = new Vector3[8]
+            p = new Vector3[8]
             {
                 new Vector3(0f, 0f, 0f),
                 new Vector3(0f, 0f, 1f),
@@ -70,12 +81,9 @@ public class MarchingCubes
     };
     #endregion
 
-    //Variable triangles was *triangles
-    public static short Polygonise(Gridcell grid, float isolevel, ref Triangle[] triangles)
+
+    static int[] edgeTable = new int[256]
     {
-        #region edgeTable
-        short[] edgeTable = new short[256]
-        {
             0x0  , 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,
             0x80c, 0x905, 0xa0f, 0xb06, 0xc0a, 0xd03, 0xe09, 0xf00,
             0x190, 0x99 , 0x393, 0x29a, 0x596, 0x49f, 0x795, 0x69c,
@@ -108,12 +116,10 @@ public class MarchingCubes
             0x69c, 0x795, 0x49f, 0x596, 0x29a, 0x393, 0x99 , 0x190,
             0xf00, 0xe09, 0xd03, 0xc0a, 0xb06, 0xa0f, 0x905, 0x80c,
             0x70c, 0x605, 0x50f, 0x406, 0x30a, 0x203, 0x109, 0x0
-        };
-        #endregion
+    };
 
-        #region triTable
-        short[,] triTable = new short[256, 16]
-        {
+    static int[,] triTable = new int[256, 16]
+    {
             {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
             {0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
             {0, 1, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
@@ -370,10 +376,13 @@ public class MarchingCubes
             {0, 9, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
             {0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
             {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
-        };
-        #endregion
+    };
 
-        short cubeindex = 0;
+    //Variable triangles was *triangles
+    public static Triangle[] Polygonise(Gridcell grid, float isolevel)
+    {
+        int cubeindex = 0;
+
         if (grid.val[0] < isolevel) cubeindex |= 1;
         if (grid.val[1] < isolevel) cubeindex |= 2;
         if (grid.val[2] < isolevel) cubeindex |= 4;
@@ -385,10 +394,11 @@ public class MarchingCubes
 
         //Cube index always equals 0
         if (edgeTable[cubeindex] == 0)
-            return 0;
+            return new Triangle[0];
 
         Vector3[] vertlist = new Vector3[12];
 
+        #region VertexInterps
         if ((edgeTable[cubeindex] & 1) > 0)
             vertlist[0] =
                VertexInterp(isolevel, grid.p[0], grid.p[1], grid.val[0], grid.val[1]);
@@ -425,18 +435,18 @@ public class MarchingCubes
         if ((edgeTable[cubeindex] & 2048) > 0)
             vertlist[11] =
                VertexInterp(isolevel, grid.p[3], grid.p[7], grid.val[3], grid.val[7]);
+        #endregion
 
+        List<Triangle> triangles = new List<Triangle>();
 
-        short ntriang = 0;
-        for (short i = 0; triTable[cubeindex, i] != -1; i += 3)
+        for (int i = 0; triTable[cubeindex, i] != -1; i += 3)
         {
-            triangles[ntriang].p[0] = vertlist[triTable[cubeindex, i]];
-            triangles[ntriang].p[1] = vertlist[triTable[cubeindex, i + 1]];
-            triangles[ntriang].p[2] = vertlist[triTable[cubeindex, i + 2]];
-            ntriang++;
+            triangles.Add(new Triangle(vertlist[triTable[cubeindex, i]],
+                                       vertlist[triTable[cubeindex, i + 1]],
+                                       vertlist[triTable[cubeindex, i + 2]]));
         }
 
-        return (ntriang);
+        return triangles.ToArray();
     }
 
 

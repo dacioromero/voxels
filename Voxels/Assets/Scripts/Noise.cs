@@ -1,5 +1,6 @@
 using UnityEngine;
 
+// Credit https://github.com/SebLague/Procedural-Landmass-Generation
 public static class Noise
 {
 
@@ -56,6 +57,7 @@ public static class Noise
                 {
                     minNoiseHeight = noiseHeight;
                 }
+
                 noiseMap[x, y] = noiseHeight;
             }
         }

@@ -4,7 +4,7 @@ using System.Linq;
 using UnityEditor;
 
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer)), DisallowMultipleComponent]
-public class GenerateTerrain : MonoBehaviour
+public class TerrainGenerator : MonoBehaviour
 {
     public float isolevel = 1;
     public float noiseScale;
@@ -20,20 +20,20 @@ public class GenerateTerrain : MonoBehaviour
 
     public MapDimensions dimensions;
 
-    // Credit https://github.com/SebLague/Procedural-Landmass-Generation
-
-    [ContextMenu("Generate")]
     public void Generate()
     {
         Debug.Log("Generating");
 
-        string id = "Terrain" + System.DateTime.UtcNow.ToFileTime().ToString();
-
         VoxelChunk chunk = new VoxelChunk();
         chunk.GenerateTerrain(dimensions, seed, noiseScale, octaves, persistance, lacunarity, offset);
-        bool[,,] voxels = chunk.voxels;
-        float[,] noiseMap = chunk.NoiseMap;
 
+        GetComponent<MeshFilter>().sharedMesh = GetComponent<MeshCollider>().sharedMesh = GenerateMesh(chunk.voxels); ;
+        GetComponent<MeshRenderer>().sharedMaterial.mainTexture = GenerateTexture(chunk.NoiseMap);
+    }
+
+    Texture2D GenerateTexture(float[,] noiseMap)
+    {
+        string id = "Terrain" + System.DateTime.UtcNow.ToFileTime().ToString();
         Color[] colourMap = new Color[dimensions.x * dimensions.z];
 
         for (int y = 0; y < dimensions.z; y++)
@@ -55,19 +55,17 @@ public class GenerateTerrain : MonoBehaviour
 
         Texture2D terrainTexture = TextureGenerator.TextureFromColourMap(colourMap, dimensions.x, dimensions.z);
 
-        AssetDatabase.CreateAsset(terrainTexture, "Assets/" + id + " Texture.asset");
+        AssetDatabase.CreateAsset(terrainTexture, "Assets/Terrain Data/" + id + " Texture.asset");
         AssetDatabase.SaveAssets();
 
-        GetComponent<MeshRenderer>().sharedMaterial.mainTexture = (Texture2D) AssetDatabase.LoadAssetAtPath("Assets/" + id + " Texture.asset", typeof(Texture2D));
+        return (Texture2D)AssetDatabase.LoadAssetAtPath("Assets/Terrain Data/" + id + " Texture.asset", typeof(Texture2D));
+    }
 
+    Mesh GenerateMesh(bool[,,] voxels)
+    {
+        string id = "Terrain" + System.DateTime.UtcNow.ToFileTime().ToString();
         Dictionary<Vector3, int> vertexDictionary = new Dictionary<Vector3, int>();
         List<int> tris = new List<int>();
-        List<Vector2> uv = new List<Vector2>();
-
-        MarchingCubes.Gridcell gridcell = new MarchingCubes.Gridcell();
-        MarchingCubes.Triangle[] triangles = new MarchingCubes.Triangle[] { new MarchingCubes.Triangle(), new MarchingCubes.Triangle(), new MarchingCubes.Triangle(), new MarchingCubes.Triangle(), new MarchingCubes.Triangle() };
-        Vector3 currentOffset;
-        short triangleCount = 0;
 
         for (int x = 0; x < dimensions.x - 1; x++)
         {
@@ -75,7 +73,10 @@ public class GenerateTerrain : MonoBehaviour
             {
                 for (int z = 0; z < dimensions.z - 1; z++)
                 {
-                    try {
+                    MarchingCubes.Gridcell gridcell = new MarchingCubes.Gridcell();
+
+                    try
+                    {
                         gridcell.val = new float[] {
                             voxels[    x,     y,     z] ? 1 : 0,
                             voxels[    x,     y, 1 + z] ? 1 : 0,
@@ -104,52 +105,60 @@ public class GenerateTerrain : MonoBehaviour
                         };
                     }
 
-                    triangleCount = MarchingCubes.Polygonise(gridcell, isolevel, ref triangles);
-
-                    if (triangleCount > 0)
-                    {
-                        currentOffset = new Vector3(x, y, z);
-
-                        for (short i = 0; i < triangleCount; i++)
-                        {
-                            for (short j = 0; j < triangles[i].p.Length; j++)
-                            {
-                                Vector3 vertex = currentOffset + triangles[i].p[j];
-
-                                int vertexIndex;
-
-                                if (!vertexDictionary.TryGetValue(vertex, out vertexIndex))
-                                {
-                                    vertexIndex = vertexDictionary.Count;
-                                    vertexDictionary.Add(vertex, vertexIndex);
-                                    uv.Add(new Vector2(vertex.x / dimensions.x, vertex.z / dimensions.z));
-                                }
-
-                                tris.Add(vertexIndex);
-                            }
-                        }
-                    }
+                    GetTriangles(gridcell, new Vector3(x, y, z), ref vertexDictionary, ref tris);
                 }
             }
+        }
+
+        Vector3[] verts = vertexDictionary.Keys.ToArray();
+        Vector2[] uv = new Vector2[verts.Length];
+
+        for (int i = 0; i < uv.Length; i++)
+        {
+            uv[i] = new Vector2(verts[i].x / dimensions.x, verts[i].z / dimensions.z);
         }
 
         Mesh terrainMesh = new Mesh
         {
             name = id + " Mesh",
-            vertices = vertexDictionary.Keys.ToArray(),
+            vertices = verts,
             triangles = tris.ToArray(),
-            uv = uv.ToArray(),
+            uv = uv,
         };
 
         terrainMesh.RecalculateBounds();
         terrainMesh.RecalculateNormals();
 
-        AssetDatabase.CreateAsset(terrainMesh, "Assets/" + terrainMesh.name + ".asset");
+        AssetDatabase.CreateAsset(terrainMesh, "Assets/Terrain Data/" + terrainMesh.name + ".asset");
         AssetDatabase.SaveAssets();
 
-        GetComponent<MeshFilter>().sharedMesh = (Mesh) AssetDatabase.LoadAssetAtPath("Assets/" + terrainMesh.name + ".asset", typeof(Mesh));
-        MeshCollider collider = GetComponent<MeshCollider>();
-        collider.sharedMesh = terrainMesh;
+        return (Mesh)AssetDatabase.LoadAssetAtPath("Assets/Terrain Data/" + terrainMesh.name + ".asset", typeof(Mesh));
+    }
+
+    void GetTriangles(MarchingCubes.Gridcell gridcell, Vector3 offset, ref Dictionary<Vector3, int> vertexDictionary, ref List<int> tris)
+    {
+        MarchingCubes.Triangle[] triangles = MarchingCubes.Polygonise(gridcell, isolevel);
+
+        if (triangles.Length > 0)
+        {
+            for (int i = 0; i < triangles.Length; i++)
+            {
+                for (int j = 0; j < triangles[i].p.Length; j++)
+                {
+                    Vector3 vertex = offset + triangles[i].p[j];
+
+                    int vertexIndex;
+
+                    if (!vertexDictionary.TryGetValue(vertex, out vertexIndex))
+                    {
+                        vertexIndex = vertexDictionary.Count;
+                        vertexDictionary.Add(vertex, vertexIndex);
+                    }
+
+                    tris.Add(vertexIndex);
+                }
+            }
+        }
     }
 
     void OnValidate()
@@ -173,13 +182,29 @@ public struct MapDimensions
     public int y;
     public int z;
 
+    public Vector3 vector3
+    {
+        get
+        {
+            return new Vector3(x, y, z);
+        }
+    }
+
+    public Vector2 vector2
+    {
+        get
+        {
+            return new Vector2(x, z);
+        }
+    }
+
     public MapDimensions(int _x, int _y, int _z)
     {
         x = _x;
         y = _y;
         z = _z;
     }
-    
+
     public static MapDimensions operator *(MapDimensions a, int b)
     {
         return new MapDimensions(a.x * b, a.y * b, a.z * b);
