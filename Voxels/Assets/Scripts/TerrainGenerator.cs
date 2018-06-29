@@ -30,7 +30,7 @@ public class TerrainGenerator : MonoBehaviour
 
         GetComponent<MeshFilter>().sharedMesh = GetComponent<MeshCollider>().sharedMesh = GenerateMesh(chunk.voxels);
 
-        Material material = new Material(Shader.Find("Default-Diffuse"))
+        Material material = new Material(Shader.Find("Legacy Shaders/Diffuse"))
         {
             mainTexture = GenerateTexture(chunk.NoiseMap)
         };
@@ -42,6 +42,8 @@ public class TerrainGenerator : MonoBehaviour
     {
         string id = "Terrain" + System.DateTime.UtcNow.ToFileTime().ToString();
         Color[] colorMap = new Color[dimensions.x * dimensions.z];
+
+        Random.InitState(seed);
 
         for (int y = 0; y < dimensions.z; y++)
         {
@@ -135,6 +137,7 @@ public class TerrainGenerator : MonoBehaviour
         };
 
         terrainMesh.RecalculateBounds();
+        terrainMesh.RecalculateTangents();
         terrainMesh.RecalculateNormals();
 
         AssetDatabase.CreateAsset(terrainMesh, "Assets/Terrain Data/" + terrainMesh.name + ".asset");

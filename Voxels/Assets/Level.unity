@@ -218,20 +218,20 @@ MonoBehaviour:
   regions:
   - name: Beach
     height: 0.12
-    colour: {r: 0.7607843, g: 0.69803923, b: 0.5019608, a: 1}
+    color: {r: 0.7607843, g: 0.69803923, b: 0.5019608, a: 0}
   - name: Plains
     height: 0.5
-    colour: {r: 0.17254902, g: 0.6901961, b: 0.21568628, a: 1}
+    color: {r: 0.17254902, g: 0.6901961, b: 0.21568628, a: 0}
   - name: Mountains
     height: 0.875
-    colour: {r: 0.33823532, g: 0.33823532, b: 0.33823532, a: 1}
+    color: {r: 0.33823532, g: 0.33823532, b: 0.33823532, a: 0}
   - name: Mountain Caps
     height: 1
-    colour: {r: 1, g: 1, b: 1, a: 1}
+    color: {r: 1, g: 1, b: 1, a: 0}
   dimensions:
-    x: 200
-    y: 20
-    z: 200
+    x: 100
+    y: 50
+    z: 100
 --- !u!23 &1204927327
 MeshRenderer:
   m_ObjectHideFlags: 0
