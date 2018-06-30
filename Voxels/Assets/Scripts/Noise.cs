@@ -1,9 +1,12 @@
 using UnityEngine;
 
-// Credit https://github.com/SebLague/Procedural-Landmass-Generation
-public static class Noise
-{
+/* 
+ * Adapted from https://github.com/SebLague/Procedural-Landmass-Generation/blob/2c519dac25f350365f95a83a3f973a9e6d3e1b83/Proc%20Gen%20E04/Assets/Scripts/Noise.cs 
+ * under MIT License https://github.com/SebLague/Procedural-Landmass-Generation/blob/2c519dac25f350365f95a83a3f973a9e6d3e1b83/LICENSE.md, retrieved in April 2018
+ */
 
+public static class Noise
+{   
     public static float[,] GenerateNoiseMap(int mapWidth, int mapHeight, int seed, float scale, int octaves, float persistence, float lacunarity, Vector2 offset)
     {
         float[,] noiseMap = new float[mapWidth, mapHeight];
@@ -72,5 +75,4 @@ public static class Noise
 
         return noiseMap;
     }
-
 }

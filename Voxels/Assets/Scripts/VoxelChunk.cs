@@ -33,15 +33,17 @@ public class VoxelChunk
         voxels = new float[0, 0, 0];
     }
 
-    public VoxelChunk(float[,,] _voxels)
+    public VoxelChunk(float[,,] voxels)
     {
-        voxels = _voxels;
+        this.voxels = voxels;
     }
 
-    public void GenerateTerrain(MapDimensions dimensions, int seed, float scale, int octaves, float persistence, float lacunarity, Vector2 offset)
+    public static VoxelChunk Generate(MapDimensions dimensions, int seed, float scale, int octaves, float persistence, float lacunarity, Vector2 offset)
     {
+        VoxelChunk chunk = new VoxelChunk();
+
         float[,] noiseMap = Noise.GenerateNoiseMap(dimensions.x, dimensions.z, seed, scale, octaves, persistence, lacunarity, offset);
-        voxels = new float[dimensions.x, dimensions.y, dimensions.z];
+        chunk.voxels = new float[dimensions.x, dimensions.y, dimensions.z];
 
         for (int x = 0; x < dimensions.x; x++)
         {
@@ -51,9 +53,11 @@ public class VoxelChunk
         
                 for (int y = 0; y < dimensions.y; y++)
                 {
-                    voxels[x, y, z] = Mathf.Clamp01(surfaceHeight - y);
+                    chunk.voxels[x, y, z] = Mathf.Clamp01(surfaceHeight - y);
                 }
             }
         }
+
+        return chunk;
     }
 }
