@@ -1,21 +1,15 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
-// Credit http://paulbourke.net/geometry/polygonise/
-public class MarchingCubes
+// Adapted from http://paulbourke.net/geometry/polygonise/, retreived in April 2018
+
+namespace MarchingCubes
 {
     [System.Serializable]
-    public class Triangle
+    public struct Triangle
     {
         public Vector3[] points;
-
-        public Triangle()
-        {
-            points = new Vector3[3]
-            {
-                Vector3.zero, Vector3.zero, Vector3.zero
-            };
-        }
 
         public Triangle(Vector3[] points)
         {
@@ -26,12 +20,20 @@ public class MarchingCubes
         {
             points = new Vector3[] { p1, p2, p3 };
         }
+
+        public bool Equals(Triangle t)
+        {
+            return Enumerable.SequenceEqual(points, t.points);
+        }
     };
 
     [System.Serializable]
-    public class Gridcell
+    public struct Gridcell
     {
-        public static Vector3[] p = new Vector3[]
+        public static Gridcell one = new Gridcell(new float[] { 1, 1, 1, 1, 1, 1, 1, 1 });
+        public static Gridcell zero = new Gridcell(new float[8]);
+
+        public static Vector3[] points = new Vector3[]
         {
             new Vector3(0, 0, 0),
             new Vector3(0, 0, 1),
@@ -51,15 +53,16 @@ public class MarchingCubes
             this.vals = vals;
         }
 
-        public Gridcell()
+        public bool Equals(Gridcell g)
         {
-            vals = new float[8];
+            return Enumerable.SequenceEqual(vals, g.vals);
         }
-    };
-
-
-    static int[] edgeTable = new int[256]
+    }
+    
+    public class MarchingCubesCalc
     {
+        static int[] edgeTable = new int[256]
+        {
             0x0  , 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,
             0x80c, 0x905, 0xa0f, 0xb06, 0xc0a, 0xd03, 0xe09, 0xf00,
             0x190, 0x99 , 0x393, 0x29a, 0x596, 0x49f, 0x795, 0x69c,
@@ -92,10 +95,10 @@ public class MarchingCubes
             0x69c, 0x795, 0x49f, 0x596, 0x29a, 0x393, 0x99 , 0x190,
             0xf00, 0xe09, 0xd03, 0xc0a, 0xb06, 0xa0f, 0x905, 0x80c,
             0x70c, 0x605, 0x50f, 0x406, 0x30a, 0x203, 0x109, 0x0
-    };
+        };
 
-    static int[,] triTable = new int[256, 16]
-    {
+        static int[,] triTable = new int[256, 16]
+        {
             {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
             {0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
             {0, 1, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
@@ -352,91 +355,101 @@ public class MarchingCubes
             {0, 9, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
             {0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
             {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
-    };
+        };
 
-    public static Triangle[] Polygonise(Gridcell grid, float isolevel)
-    {
-        int cubeindex = 0;
-
-        if (grid.vals[0] < isolevel) cubeindex |= 1;
-        if (grid.vals[1] < isolevel) cubeindex |= 2;
-        if (grid.vals[2] < isolevel) cubeindex |= 4;
-        if (grid.vals[3] < isolevel) cubeindex |= 8;
-        if (grid.vals[4] < isolevel) cubeindex |= 16;
-        if (grid.vals[5] < isolevel) cubeindex |= 32;
-        if (grid.vals[6] < isolevel) cubeindex |= 64;
-        if (grid.vals[7] < isolevel) cubeindex |= 128;
-
-        if (edgeTable[cubeindex] == 0)
-            return new Triangle[0];
-
-        Vector3[] vertlist = new Vector3[12];
-
-        #region VertexInterps
-        if ((edgeTable[cubeindex] & 1) > 0)
-            vertlist[0] =
-               VertexInterp(isolevel, Gridcell.p[0], Gridcell.p[1], grid.vals[0], grid.vals[1]);
-        if ((edgeTable[cubeindex] & 2) > 0)
-            vertlist[1] =
-               VertexInterp(isolevel, Gridcell.p[1], Gridcell.p[2], grid.vals[1], grid.vals[2]);
-        if ((edgeTable[cubeindex] & 4) > 0)
-            vertlist[2] =
-               VertexInterp(isolevel, Gridcell.p[2], Gridcell.p[3], grid.vals[2], grid.vals[3]);
-        if ((edgeTable[cubeindex] & 8) > 0)
-            vertlist[3] =
-               VertexInterp(isolevel, Gridcell.p[3], Gridcell.p[0], grid.vals[3], grid.vals[0]);
-        if ((edgeTable[cubeindex] & 16) > 0)
-            vertlist[4] =
-               VertexInterp(isolevel, Gridcell.p[4], Gridcell.p[5], grid.vals[4], grid.vals[5]);
-        if ((edgeTable[cubeindex] & 32) > 0)
-            vertlist[5] =
-               VertexInterp(isolevel, Gridcell.p[5], Gridcell.p[6], grid.vals[5], grid.vals[6]);
-        if ((edgeTable[cubeindex] & 64) > 0)
-            vertlist[6] =
-               VertexInterp(isolevel, Gridcell.p[6], Gridcell.p[7], grid.vals[6], grid.vals[7]);
-        if ((edgeTable[cubeindex] & 128) > 0)
-            vertlist[7] =
-               VertexInterp(isolevel, Gridcell.p[7], Gridcell.p[4], grid.vals[7], grid.vals[4]);
-        if ((edgeTable[cubeindex] & 256) > 0)
-            vertlist[8] =
-               VertexInterp(isolevel, Gridcell.p[0], Gridcell.p[4], grid.vals[0], grid.vals[4]);
-        if ((edgeTable[cubeindex] & 512) > 0)
-            vertlist[9] =
-               VertexInterp(isolevel, Gridcell.p[1], Gridcell.p[5], grid.vals[1], grid.vals[5]);
-        if ((edgeTable[cubeindex] & 1024) > 0)
-            vertlist[10] =
-               VertexInterp(isolevel, Gridcell.p[2], Gridcell.p[6], grid.vals[2], grid.vals[6]);
-        if ((edgeTable[cubeindex] & 2048) > 0)
-            vertlist[11] =
-               VertexInterp(isolevel, Gridcell.p[3], Gridcell.p[7], grid.vals[3], grid.vals[7]);
-        #endregion
-
-        List<Triangle> triangles = new List<Triangle>(5);
-
-        for (int i = 0; triTable[cubeindex, i] != -1; i += 3)
+        public static Triangle[] Polygonise(float[] vals, float isolevel)
         {
-            triangles.Add(new Triangle(vertlist[triTable[cubeindex, i]],
-                                       vertlist[triTable[cubeindex, i + 1]],
-                                       vertlist[triTable[cubeindex, i + 2]]));
+            int cubeindex = 0;
+
+            if (vals[0] < isolevel) cubeindex |= 1;
+            if (vals[1] < isolevel) cubeindex |= 2;
+            if (vals[2] < isolevel) cubeindex |= 4;
+            if (vals[3] < isolevel) cubeindex |= 8;
+            if (vals[4] < isolevel) cubeindex |= 16;
+            if (vals[5] < isolevel) cubeindex |= 32;
+            if (vals[6] < isolevel) cubeindex |= 64;
+            if (vals[7] < isolevel) cubeindex |= 128;
+
+            if (edgeTable[cubeindex] == 0)
+                return new Triangle[0];
+
+            Vector3[] vertlist = new Vector3[12];
+
+            #region VertexInterps
+            if ((edgeTable[cubeindex] & 1) > 0)
+                vertlist[0] =
+                   VertexInterp(isolevel, Gridcell.points[0], Gridcell.points[1], vals[0], vals[1]);
+            if ((edgeTable[cubeindex] & 2) > 0)
+                vertlist[1] =
+                   VertexInterp(isolevel, Gridcell.points[1], Gridcell.points[2], vals[1], vals[2]);
+            if ((edgeTable[cubeindex] & 4) > 0)
+                vertlist[2] =
+                   VertexInterp(isolevel, Gridcell.points[2], Gridcell.points[3], vals[2], vals[3]);
+            if ((edgeTable[cubeindex] & 8) > 0)
+                vertlist[3] =
+                   VertexInterp(isolevel, Gridcell.points[3], Gridcell.points[0], vals[3], vals[0]);
+            if ((edgeTable[cubeindex] & 16) > 0)
+                vertlist[4] =
+                   VertexInterp(isolevel, Gridcell.points[4], Gridcell.points[5], vals[4], vals[5]);
+            if ((edgeTable[cubeindex] & 32) > 0)
+                vertlist[5] =
+                   VertexInterp(isolevel, Gridcell.points[5], Gridcell.points[6], vals[5], vals[6]);
+            if ((edgeTable[cubeindex] & 64) > 0)
+                vertlist[6] =
+                   VertexInterp(isolevel, Gridcell.points[6], Gridcell.points[7], vals[6], vals[7]);
+            if ((edgeTable[cubeindex] & 128) > 0)
+                vertlist[7] =
+                   VertexInterp(isolevel, Gridcell.points[7], Gridcell.points[4], vals[7], vals[4]);
+            if ((edgeTable[cubeindex] & 256) > 0)
+                vertlist[8] =
+                   VertexInterp(isolevel, Gridcell.points[0], Gridcell.points[4], vals[0], vals[4]);
+            if ((edgeTable[cubeindex] & 512) > 0)
+                vertlist[9] =
+                   VertexInterp(isolevel, Gridcell.points[1], Gridcell.points[5], vals[1], vals[5]);
+            if ((edgeTable[cubeindex] & 1024) > 0)
+                vertlist[10] =
+                   VertexInterp(isolevel, Gridcell.points[2], Gridcell.points[6], vals[2], vals[6]);
+            if ((edgeTable[cubeindex] & 2048) > 0)
+                vertlist[11] =
+                   VertexInterp(isolevel, Gridcell.points[3], Gridcell.points[7], vals[3], vals[7]);
+            #endregion
+
+            List<Triangle> triangles = new List<Triangle>(5);
+
+            for (int i = 0; triTable[cubeindex, i] != -1; i += 3)
+            {
+                triangles.Add(new Triangle(vertlist[triTable[cubeindex, i]],
+                                           vertlist[triTable[cubeindex, i + 1]],
+                                           vertlist[triTable[cubeindex, i + 2]]));
+            }
+
+            return triangles.ToArray();
         }
 
-        return triangles.ToArray();
-    }
+        public static Triangle[] Polygonise(Gridcell grid, float isolevel)
+        {
+            return Polygonise(grid.vals, isolevel);
+        }
 
+        public static Triangle[] Polygonise(float val1, float val2, float val3, float val4, float isolevel)
+        {
+            return Polygonise(new float[] { val1, val2, val3, val4 }, isolevel);
+        }
 
-    static Vector3 VertexInterp(float isolevel, Vector3 p1, Vector3 p2, float valp1, float valp2)
-    {
-        if (Mathf.Abs(isolevel - valp1) < 0)
-            return p1;
-        if (Mathf.Abs(isolevel - valp2) < 0)
-            return p2;
-        if (Mathf.Abs(valp1 - valp2) < 0)
-            return p1;
+        static Vector3 VertexInterp(float isolevel, Vector3 p1, Vector3 p2, float valp1, float valp2)
+        {
+            if (Mathf.Abs(isolevel - valp1) < 0)
+                return p1;
+            if (Mathf.Abs(isolevel - valp2) < 0)
+                return p2;
+            if (Mathf.Abs(valp1 - valp2) < 0)
+                return p1;
 
-        float mu = (isolevel - valp1) / (valp2 - valp1);
+            float mu = (isolevel - valp1) / (valp2 - valp1);
 
-        return new Vector3(p1.x + mu * (p2.x - p1.x),
-                           p1.y + mu * (p2.y - p1.y),
-                           p1.z + mu * (p2.z - p1.z));
+            return new Vector3(p1.x + mu * (p2.x - p1.x),
+                               p1.y + mu * (p2.y - p1.y),
+                               p1.z + mu * (p2.z - p1.z));
+        }
     }
 }

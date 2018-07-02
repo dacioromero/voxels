@@ -2,9 +2,10 @@
 using UnityEditor;
 
 [CustomEditor(typeof(TerrainGenerator))]
-public class GenerateTerrainEditor : Editor
+public class TerrainGeneratorEditor : Editor
 {
     SerializedProperty isolevel;
+    SerializedProperty vertDistThreshold;
     SerializedProperty noiseScale;
     SerializedProperty octaves;
     SerializedProperty lacunarity;
@@ -17,12 +18,15 @@ public class GenerateTerrainEditor : Editor
     private void OnEnable()
     {
         isolevel = serializedObject.FindProperty("isolevel");
+        vertDistThreshold = serializedObject.FindProperty("vertDistThreshold");
+
         noiseScale = serializedObject.FindProperty("noiseScale");
         octaves = serializedObject.FindProperty("octaves");
         lacunarity = serializedObject.FindProperty("lacunarity");
         persistence = serializedObject.FindProperty("persistence");
         seed = serializedObject.FindProperty("seed");
         offset = serializedObject.FindProperty("offset");
+
         regions = serializedObject.FindProperty("regions");
         dimensions = serializedObject.FindProperty("dimensions");
     }
@@ -39,8 +43,13 @@ public class GenerateTerrainEditor : Editor
         {
             tgScript.Generate();
         }
-        
+
+        EditorGUILayout.LabelField("Mesh Settings", EditorStyles.boldLabel);
         EditorGUILayout.PropertyField(isolevel);
+        EditorGUILayout.PropertyField(vertDistThreshold);
+        EditorGUILayout.Space();
+
+        EditorGUILayout.LabelField("Voxel Settings", EditorStyles.boldLabel);
         EditorGUILayout.PropertyField(noiseScale);
         EditorGUILayout.PropertyField(octaves);
         EditorGUILayout.PropertyField(lacunarity);
@@ -49,5 +58,7 @@ public class GenerateTerrainEditor : Editor
         EditorGUILayout.PropertyField(offset);
         EditorGUILayout.PropertyField(dimensions, true);
         EditorGUILayout.PropertyField(regions, true);
+
+        serializedObject.ApplyModifiedProperties();
     }
 }

@@ -38,7 +38,7 @@ public class VoxelChunk
         this.voxels = voxels;
     }
 
-    public static VoxelChunk Generate(MapDimensions dimensions, int seed, float scale, int octaves, float persistence, float lacunarity, Vector2 offset)
+    public static VoxelChunk Generate(Vector3Int dimensions, int seed, float scale, int octaves, float persistence, float lacunarity, Vector2 offset)
     {
         VoxelChunk chunk = new VoxelChunk();
 

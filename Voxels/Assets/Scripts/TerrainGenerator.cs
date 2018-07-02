@@ -2,6 +2,9 @@ using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
+using Unity.Jobs;
+using Unity.Collections;
+using MarchingCubes;
 
 /* 
  * Adapted from https://github.com/SebLague/Procedural-Landmass-Generation/blob/2c519dac25f350365f95a83a3f973a9e6d3e1b83/Proc%20Gen%20E04/Assets/Scripts/MapGenerator.cs 
@@ -11,22 +14,19 @@ using UnityEditor;
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer)), DisallowMultipleComponent]
 public class TerrainGenerator : MonoBehaviour
 {
-    // [SerializeField]
-    // private float vertDistThreshold = 0.25f;
-
     [SerializeField, Range(0, 1)]
-    private float isolevel = 0.5f, persistence;
+    private float isolevel = 0.5f, persistence = 0.5f, vertDistThreshold = 0.5f;
     [SerializeField]
-    private float noiseScale, lacunarity;
+    private float noiseScale = 100, lacunarity = 2;
     [SerializeField]
-    private int octaves, seed;
+    private int octaves = 16, seed;
 
     [SerializeField]
     private Vector2 offset;
     [SerializeField]
     private TerrainType[] regions;
     [SerializeField]
-    private MapDimensions dimensions;
+    private Vector3Int dimensions;
 
     public void Generate()
     {
@@ -44,7 +44,6 @@ public class TerrainGenerator : MonoBehaviour
 
     Texture2D GenerateTexture(float[,] noiseMap)
     {
-        string id = "Terrain" + System.DateTime.UtcNow.ToFileTime().ToString();
         Color[] colorMap = new Color[dimensions.x * dimensions.z];
 
         Random.InitState(seed);
@@ -59,8 +58,7 @@ public class TerrainGenerator : MonoBehaviour
                 {
                     if (currentHeight <= regions[i].height)
                     {
-                        float random = Random.Range(0.95f, 1.05f);
-                        colorMap[y * dimensions.x + x] = regions[i].color * random;
+                        colorMap[y * dimensions.x + x] = regions[i].color.Evaluate(Random.value);
                         break;
                     }
                 }
@@ -68,6 +66,8 @@ public class TerrainGenerator : MonoBehaviour
         }
 
         Texture2D terrainTexture = TextureGenerator.TextureFromColourMap(colorMap, dimensions.x, dimensions.z);
+
+        string id = "Terrain" + System.DateTime.UtcNow.ToFileTime().ToString();
 
         AssetDatabase.CreateAsset(terrainTexture, "Assets/Terrain Data/" + id + " Texture.asset");
         AssetDatabase.SaveAssets();
@@ -78,11 +78,8 @@ public class TerrainGenerator : MonoBehaviour
 
     Mesh GenerateMesh(float[,,] voxels)
     {
-        double gtTime = 0;
-        string id = "Terrain" + System.DateTime.UtcNow.ToFileTime().ToString();
-
-        Dictionary<Vector3, int> vertIndexDictionary = new Dictionary<Vector3, int>(dimensions.Volume / 10);//, new Vector3Comparer(vertDistThreshold * vertDistThreshold));
-        List<int> tris = new List<int>();
+        List<float> gridVals = new List<float>();
+        List<Vector3Int> gridPositions = new List<Vector3Int>();
 
         for (int x = 0; x < dimensions.x - 1; x++)
         {
@@ -90,11 +87,11 @@ public class TerrainGenerator : MonoBehaviour
             {
                 for (int z = 0; z < dimensions.z - 1; z++)
                 {
-                    MarchingCubes.Gridcell gridcell = new MarchingCubes.Gridcell();
+                    float[] gridVal;
 
                     try
                     {
-                        gridcell.vals = new float[] {
+                        gridVal = new float[] {
                             voxels[    x,     y,     z],
                             voxels[    x,     y, 1 + z],
                             voxels[1 + x,     y, 1 + z],
@@ -109,7 +106,7 @@ public class TerrainGenerator : MonoBehaviour
 
                     catch
                     {
-                        gridcell.vals = new float[] {
+                        gridVal = new float[] {
                             voxels[    x,     y,     z],
                             voxels[    x,     y, 1 + z],
                             voxels[1 + x,     y, 1 + z],
@@ -122,14 +119,32 @@ public class TerrainGenerator : MonoBehaviour
                         };
                     }
 
-                    double GetTrianglesStart = EditorApplication.timeSinceStartup;
-                    GetTriangles(gridcell, new Vector3(x, y, z), ref vertIndexDictionary, ref tris);
-                    gtTime += EditorApplication.timeSinceStartup - GetTrianglesStart;
+                    if (Enumerable.SequenceEqual(gridVal, Gridcell.one.vals) || Enumerable.SequenceEqual(gridVal, Gridcell.zero.vals))
+                        continue;
+
+                    gridVals.AddRange(gridVal);
+                    gridPositions.Add(new Vector3Int(x, y, z));
                 }
             }
         }
+        
+        PolygoniseJob polygoniseJob = new PolygoniseJob()
+        {
+            gridVals = new NativeArray<float>(gridVals.ToArray(), Allocator.Persistent),
+            gridPositions = new NativeArray<Vector3Int>(gridPositions.ToArray(), Allocator.Persistent),
+            isolevel = isolevel,
 
-        Vector3[] verts = vertIndexDictionary.Keys.ToArray();
+            verts = new NativeList<Vector3>(Allocator.Persistent),
+            vertIndices = new NativeList<int>(Allocator.Persistent),
+            tris = new NativeList<int>(Allocator.Persistent),
+        };
+
+        polygoniseJob.Schedule(gridVals.Count / 4, 64).Complete();
+        polygoniseJob.DisposeInput();
+
+        Vector3[] verts = polygoniseJob.verts.ToArray();
+        int[] tris = polygoniseJob.tris.ToArray();
+        polygoniseJob.DisposeInternal();
         Vector2[] uv = new Vector2[verts.Length];
 
         for (int i = 0; i < uv.Length; i++)
@@ -137,11 +152,13 @@ public class TerrainGenerator : MonoBehaviour
             uv[i] = new Vector2(verts[i].x / dimensions.x, verts[i].z / dimensions.z);
         }
 
+        string id = "Terrain" + System.DateTime.UtcNow.ToFileTime().ToString();
+
         Mesh terrainMesh = new Mesh
         {
             name = id + " Mesh",
             vertices = verts,
-            triangles = tris.ToArray(),
+            triangles = tris,
             uv = uv,
         };
 
@@ -156,99 +173,80 @@ public class TerrainGenerator : MonoBehaviour
         return (Mesh)AssetDatabase.LoadAssetAtPath("Assets/Terrain Data/" + terrainMesh.name + ".asset", typeof(Mesh));
     }
 
-    void GetTriangles(MarchingCubes.Gridcell gridcell, Vector3 offset, ref Dictionary<Vector3, int> vertIndexDictionary, ref List<int> tris)
+    struct PolygoniseJob : IJobParallelFor
     {
-        MarchingCubes.Triangle[] triangles = MarchingCubes.Polygonise(gridcell, isolevel);
+        [ReadOnly]
+        public NativeArray<float> gridVals;
+        [ReadOnly]
+        public NativeArray<Vector3Int> gridPositions;
+        [ReadOnly]
+        public float isolevel;
 
-        if (triangles.Length > 0)
+        [WriteOnly]
+        public NativeList<int> vertIndices;
+        [WriteOnly]
+        public NativeList<Vector3> verts;
+        [WriteOnly]
+        public NativeList<int> tris;
+
+        public void Execute(int index)
         {
-            for (int i = 0; i < triangles.Length; i++)
+            foreach (Triangle triangle in MarchingCubesCalc.Polygonise(gridVals[index * 4], gridVals[index * 4 + 1], gridVals[index * 4 + 2], gridVals[index * 4 + 3], isolevel))
             {
-                for (int j = 0; j < triangles[i].points.Length; j++)
+                foreach (Vector3 p in triangle.points)
                 {
-                    Vector3 vertex = offset + triangles[i].points[j];
+                    Vector3 vert = p + gridPositions[index];
 
-                    int vertexIndex;
-
-                    if (!vertIndexDictionary.TryGetValue(vertex, out vertexIndex))
+                    if (verts.Contains(vert))
                     {
-                        vertexIndex = vertIndexDictionary.Count;
-                        vertIndexDictionary.Add(vertex, vertexIndex);
+                        vertIndices.Add(verts.IndexOf(vert));
                     }
-
-                    tris.Add(vertexIndex);
+                    else
+                    {
+                        vertIndices.Add(verts.Length);
+                        verts.Add(vert);
+                    }
                 }
             }
+        }
+
+        public void DisposeInternal()
+        {
+            vertIndices.Dispose();
+            verts.Dispose();
+            tris.Dispose();
+        }
+
+        public void DisposeInput()
+        {
+            gridVals.Dispose();
+            gridPositions.Dispose();
         }
     }
 
     void OnValidate()
     {
         if (lacunarity < 1)
-        {
             lacunarity = 1;
-        }
 
         if (octaves < 0)
-        {
             octaves = 0;
-        }
+
+        if (dimensions.x < 1)
+            dimensions.x = 1;
+
+        if (dimensions.y < 1)
+            dimensions.y = 1;
+
+        if (dimensions.z < 1)
+            dimensions.z = 1;
     }
 }
-
-[System.Serializable]
-public struct MapDimensions
-{
-    public int x;
-    public int y;
-    public int z;
-
-    public int Volume
-    {
-        get
-        {
-            return x * y * z;
-        }
-    }
-
-    public MapDimensions(int x, int y, int z)
-    {
-        this.x = x;
-        this.y = y;
-        this.z = z;
-    }
-
-    public static MapDimensions operator *(MapDimensions a, int b)
-    {
-        return new MapDimensions(a.x * b, a.y * b, a.z * b);
-    }
-}
-
 
 [System.Serializable]
 public struct TerrainType
 {
     public string name;
     public float height;
-    public Color color;
-}
-
-class Vector3Comparer : IEqualityComparer<Vector3>
-{
-    float sqrThreshold;
-
-    public Vector3Comparer(float sqrThreshold)
-    {
-        this.sqrThreshold = sqrThreshold;
-    }
-
-    public bool Equals(Vector3 x, Vector3 y)
-    {
-        return (x - y).sqrMagnitude < sqrThreshold;
-    }
-
-    public int GetHashCode(Vector3 codeh)
-    {
-        return 0;
-    }
+    public Gradient color;
 }
