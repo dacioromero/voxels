@@ -1,14 +1,17 @@
-using UnityEngine;
-using System.Collections.Generic;
-using System.Linq;
 using UnityEditor;
+using UnityEngine;
+using Unity.Entities;
+using NativeComponentExtensions;
 using Unity.Jobs;
 using Unity.Collections;
+using System.Collections.Generic;
+using System.Linq;
 using MarchingCubes;
+using Unity.Mathematics;
 
 /* 
  * Adapted from https://github.com/SebLague/Procedural-Landmass-Generation/blob/2c519dac25f350365f95a83a3f973a9e6d3e1b83/Proc%20Gen%20E04/Assets/Scripts/MapGenerator.cs 
- * under MIT License https://github.com/SebLague/Procedural-Landmass-Generation/blob/2c519dac25f350365f95a83a3f973a9e6d3e1b83/LICENSE.md, retrieved in April 2018
+ * under the MIT License https://github.com/SebLague/Procedural-Landmass-Generation/blob/2c519dac25f350365f95a83a3f973a9e6d3e1b83/LICENSE.md, retrieved in April 2018
  */
 
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer)), DisallowMultipleComponent]
@@ -46,7 +49,7 @@ public class TerrainGenerator : MonoBehaviour
     {
         Color[] colorMap = new Color[dimensions.x * dimensions.z];
 
-        Random.InitState(seed);
+        UnityEngine.Random.InitState(seed);
 
         for (int y = 0; y < dimensions.z; y++)
         {
@@ -78,8 +81,8 @@ public class TerrainGenerator : MonoBehaviour
 
     Mesh GenerateMesh(float[,,] voxels)
     {
-        List<float> gridVals = new List<float>();
-        List<Vector3Int> gridPositions = new List<Vector3Int>();
+        List<Gridcell> grids = new List<Gridcell>();
+        List<Vector3Int> gridOffsets = new List<Vector3Int>();
 
         for (int x = 0; x < dimensions.x - 1; x++)
         {
@@ -87,78 +90,90 @@ public class TerrainGenerator : MonoBehaviour
             {
                 for (int z = 0; z < dimensions.z - 1; z++)
                 {
-                    float[] gridVal;
+                    Gridcell gridcell;
 
                     try
                     {
-                        gridVal = new float[] {
-                            voxels[    x,     y,     z],
-                            voxels[    x,     y, 1 + z],
-                            voxels[1 + x,     y, 1 + z],
-                            voxels[1 + x,     y,     z],
-
-                            voxels[    x, 1 + y,     z],
-                            voxels[    x, 1 + y, 1 + z],
-                            voxels[1 + x, 1 + y, 1 + z],
-                            voxels[1 + x, 1 + y,     z],
+                        gridcell = new Gridcell
+                        {
+                            val1 = voxels[x, y, z],
+                            val2 = voxels[x, y, 1 + z],
+                            val3 = voxels[1 + x, y, 1 + z],
+                            val4 = voxels[1 + x, y, z],
+                            val5 = voxels[x, 1 + y, z],
+                            val6 = voxels[x, 1 + y, 1 + z],
+                            val7 = voxels[1 + x, 1 + y, 1 + z],
+                            val8 = voxels[1 + x, 1 + y, z],
                         };
                     }
 
                     catch
                     {
-                        gridVal = new float[] {
-                            voxels[    x,     y,     z],
-                            voxels[    x,     y, 1 + z],
-                            voxels[1 + x,     y, 1 + z],
-                            voxels[1 + x,     y,     z],
-
-                            0,
-                            0,
-                            0,
-                            0
+                        gridcell = new Gridcell
+                        {
+                            val1 = voxels[x, y, z],
+                            val2 = voxels[x, y, 1 + z],
+                            val3 = voxels[1 + x, y, 1 + z],
+                            val4 = voxels[1 + x, y, z],
+                            val5 = 0,
+                            val6 = 0,
+                            val7 = 0,
+                            val8 = 0,
                         };
                     }
 
-                    if (Enumerable.SequenceEqual(gridVal, Gridcell.one.vals) || Enumerable.SequenceEqual(gridVal, Gridcell.zero.vals))
+                    if (gridcell.Equals(Gridcell.one) || gridcell.Equals(Gridcell.zero))
                         continue;
 
-                    gridVals.AddRange(gridVal);
-                    gridPositions.Add(new Vector3Int(x, y, z));
+                    grids.Add(gridcell);
+                    gridOffsets.Add(new Vector3Int(x, y, z));
                 }
             }
         }
+
+        NativeQueue<Vector3> verticesNQ = new NativeQueue<Vector3>(Allocator.Persistent);
+
+        PolygoniseJob polygonise = new PolygoniseJob(new NativeArray<Gridcell>(grids.ToArray(), Allocator.Persistent),
+                                                     new NativeArray<Vector3Int>(gridOffsets.ToArray(), Allocator.Persistent),
+                                                     isolevel,
+                                                     verticesNQ);
+
+        polygonise.Schedule(grids.Count, 64).Complete();
+
+        // Dispose inputs
+        polygonise.grids.Dispose();
+        polygonise.gridOffsets.Dispose();
+
+        // Output corresponding mesh points and triangle arrays
+        MeshifyJob meshify = new MeshifyJob(verticesNQ.ToNativeArray(Allocator.Persistent));
         
-        PolygoniseJob polygoniseJob = new PolygoniseJob()
-        {
-            gridVals = new NativeArray<float>(gridVals.ToArray(), Allocator.Persistent),
-            gridPositions = new NativeArray<Vector3Int>(gridPositions.ToArray(), Allocator.Persistent),
-            isolevel = isolevel,
+        verticesNQ.Dispose();
 
-            verts = new NativeList<Vector3>(Allocator.Persistent),
-            vertIndices = new NativeList<int>(Allocator.Persistent),
-            tris = new NativeList<int>(Allocator.Persistent),
-        };
+        meshify.Schedule(meshify.vertices_out.Count(), 2).Complete();
+        
+        meshify.vertices_in.Dispose();
+        meshify.input_handled1.Dispose();
+        meshify.input_handled2.Dispose();
 
-        polygoniseJob.Schedule(gridVals.Count / 4, 64).Complete();
-        polygoniseJob.DisposeInput();
+        // Convert outputs to standard arrays and dispose
+        int[] triangles = meshify.triangles_out.ToArray();
+        meshify.triangles_out.Dispose();
 
-        Vector3[] verts = polygoniseJob.verts.ToArray();
-        int[] tris = polygoniseJob.tris.ToArray();
-        polygoniseJob.DisposeInternal();
-        Vector2[] uv = new Vector2[verts.Length];
+        Vector3[] vertices = meshify.vertices_out.ToArray();
+        meshify.vertices_out.Dispose();
 
+        // Get UV based on position
+        Vector2[] uv = new Vector2[vertices.Length];
         for (int i = 0; i < uv.Length; i++)
         {
-            uv[i] = new Vector2(verts[i].x / dimensions.x, verts[i].z / dimensions.z);
+            uv[i] = new Vector2(vertices[i].x / dimensions.x, vertices[i].z / dimensions.z);
         }
-
-        string id = "Terrain" + System.DateTime.UtcNow.ToFileTime().ToString();
 
         Mesh terrainMesh = new Mesh
         {
-            name = id + " Mesh",
-            vertices = verts,
-            triangles = tris,
+            name = "Terrain" + System.DateTime.UtcNow.ToFileTime().ToString() + " Mesh",
+            vertices = vertices,
+            triangles = triangles,
             uv = uv,
         };
 
@@ -176,51 +191,117 @@ public class TerrainGenerator : MonoBehaviour
     struct PolygoniseJob : IJobParallelFor
     {
         [ReadOnly]
-        public NativeArray<float> gridVals;
+        public NativeArray<Gridcell> grids;
         [ReadOnly]
-        public NativeArray<Vector3Int> gridPositions;
+        public NativeArray<Vector3Int> gridOffsets;
         [ReadOnly]
         public float isolevel;
 
         [WriteOnly]
-        public NativeList<int> vertIndices;
-        [WriteOnly]
-        public NativeList<Vector3> verts;
-        [WriteOnly]
-        public NativeList<int> tris;
+        public NativeQueue<Vector3>.Concurrent verts;
+
+        public PolygoniseJob(NativeArray<Gridcell> grids, NativeArray<Vector3Int> gridOffsets, float isolevel, NativeQueue<Vector3>.Concurrent verts)
+        {
+            this.grids = grids;
+            this.gridOffsets = gridOffsets;
+            this.isolevel = isolevel;
+
+            this.verts = verts;
+        }
 
         public void Execute(int index)
         {
-            foreach (Triangle triangle in MarchingCubesCalc.Polygonise(gridVals[index * 4], gridVals[index * 4 + 1], gridVals[index * 4 + 2], gridVals[index * 4 + 3], isolevel))
+            foreach (Triangle t in MarchingCubesCalc.Polygonise(grids[index], isolevel))
             {
-                foreach (Vector3 p in triangle.points)
-                {
-                    Vector3 vert = p + gridPositions[index];
+                Vector3[] triangle = new Vector3[3];
 
-                    if (verts.Contains(vert))
-                    {
-                        vertIndices.Add(verts.IndexOf(vert));
-                    }
-                    else
-                    {
-                        vertIndices.Add(verts.Length);
-                        verts.Add(vert);
-                    }
+                for(int i = 0; i < 3; i++)
+                {
+                    triangle[i] = t.Verts[i] + gridOffsets[index];
                 }
+
+                // Enqueue triangle points at the same time to keep them together
+                verts.Enqueue(triangle);
+            }
+        }
+    }
+
+    struct MeshifyJob : IJobParallelFor
+    {
+        [ReadOnly]
+        public NativeArray<Vector3> vertices_in;
+
+        // Using bytes because booleans aren't blittable
+        public NativeArray<byte> input_handled1;
+        public NativeArray<byte> input_handled2;
+
+        public NativeArray<Vector3> vertices_out;
+        public NativeArray<int> triangles_out;
+
+
+        public MeshifyJob(NativeArray<Vector3> vertices_in)
+        {
+            this.vertices_in = vertices_in;
+
+            input_handled1 = new NativeArray<byte>(vertices_in.Length, Allocator.Persistent);
+            input_handled2 = new NativeArray<byte>(vertices_in.Length, Allocator.Persistent);
+
+            // Set triangle output size of the input and vertex output to number of distinct inputs
+            triangles_out = new NativeArray<int>(vertices_in.Length, Allocator.Persistent);
+            vertices_out = new NativeArray<Vector3>(vertices_in.Distinct(Vec3EqComparer.c).Count(), Allocator.Persistent);
+        }
+
+        public void Execute(int triIndex)
+        {
+            // Set our vert index to the index of triangle index
+            int vertIndex = triIndex;
+
+            // While another thread is handling or has handled this vertex
+            while (IsInputHandled(vertIndex))
+            {
+                // Look for another unless there is another then exit
+                if (vertIndex == vertices_in.Length)
+                    return;
+            }
+
+            // Set our vertex
+            Vector3 vertex = vertices_in[vertIndex];
+
+            // Add this vertex to the output at the index the triangle index and add triangle index to the output at the index of this vertex
+            vertices_out[triIndex] = vertex;
+            triangles_out[vertIndex] = triIndex;
+
+            // For the next vertices in the input
+            for (int i = vertIndex + 1; i < vertices_in.Length; i++)
+            {
+                // Skip if handled or isn't equal to our vertex
+                if (IsInputHandled(i) || vertex != vertices_in[i])
+                    continue;
+
+                // Mark this input as handled and at the index of this vertex add the index of the reference vertex
+                SetInputHandled(i, 1);
+                triangles_out[i] = triIndex;
             }
         }
 
-        public void DisposeInternal()
+        bool IsInputHandled(int index)
         {
-            vertIndices.Dispose();
-            verts.Dispose();
-            tris.Dispose();
+            bool handled = false;
+
+            try { handled |= input_handled1[index] == 1; }
+            catch { }
+            try { handled |= input_handled2[index] == 1; }
+            catch { }
+
+            return handled;
         }
 
-        public void DisposeInput()
+        void SetInputHandled(int index, byte handled)
         {
-            gridVals.Dispose();
-            gridPositions.Dispose();
+            try { input_handled1[index] = handled; }
+            catch { }
+            try { input_handled2[index] = handled; }
+            catch { }
         }
     }
 
@@ -249,4 +330,20 @@ public struct TerrainType
     public string name;
     public float height;
     public Gradient color;
+}
+
+// Default Equals method is more accurate == operator is more lenient
+public class Vec3EqComparer : IEqualityComparer<Vector3>
+{
+    static public Vec3EqComparer c = new Vec3EqComparer();
+
+    public bool Equals(Vector3 x, Vector3 y)
+    {
+        return x == y;
+    }
+
+    public int GetHashCode(Vector3 obj)
+    {
+        return obj.GetHashCode();
+    }
 }
