@@ -211,7 +211,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   isolevel: 0.5
   persistence: 0.75
-  vertDistThreshold: 0.5
   noiseScale: 100
   lacunarity: 1.3333334
   octaves: 32

@@ -5,9 +5,8 @@ using NativeComponentExtensions;
 using Unity.Jobs;
 using Unity.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using MarchingCubes;
-using Unity.Mathematics;
+using System.Linq;
 
 /* 
  * Adapted from https://github.com/SebLague/Procedural-Landmass-Generation/blob/2c519dac25f350365f95a83a3f973a9e6d3e1b83/Proc%20Gen%20E04/Assets/Scripts/MapGenerator.cs 
@@ -18,7 +17,7 @@ using Unity.Mathematics;
 public class TerrainGenerator : MonoBehaviour
 {
     [SerializeField, Range(0, 1)]
-    private float isolevel = 0.5f, persistence = 0.5f, vertDistThreshold = 0.5f;
+    private float isolevel = 0.5f, persistence = 0.5f;
     [SerializeField]
     private float noiseScale = 100, lacunarity = 2;
     [SerializeField]
@@ -49,7 +48,7 @@ public class TerrainGenerator : MonoBehaviour
     {
         Color[] colorMap = new Color[dimensions.x * dimensions.z];
 
-        UnityEngine.Random.InitState(seed);
+        Random.InitState(seed);
 
         for (int y = 0; y < dimensions.z; y++)
         {
@@ -81,8 +80,8 @@ public class TerrainGenerator : MonoBehaviour
 
     Mesh GenerateMesh(float[,,] voxels)
     {
-        List<Gridcell> grids = new List<Gridcell>();
-        List<Vector3Int> gridOffsets = new List<Vector3Int>();
+        var grids = new NativeList<Gridcell>(Allocator.Persistent);
+        var gridOffsets = new NativeList<Vector3Int>(grids.Length, Allocator.Persistent);
 
         for (int x = 0; x < dimensions.x - 1; x++)
         {
@@ -125,57 +124,70 @@ public class TerrainGenerator : MonoBehaviour
                     if (gridcell.Equals(Gridcell.one) || gridcell.Equals(Gridcell.zero))
                         continue;
 
+                    int index = x + dimensions.y * (y + (dimensions.z - 1) * z);
+
                     grids.Add(gridcell);
                     gridOffsets.Add(new Vector3Int(x, y, z));
                 }
             }
         }
 
-        NativeQueue<Vector3> verticesNQ = new NativeQueue<Vector3>(Allocator.Persistent);
+        var triangleObjs = new NativeQueue<Triangle>(Allocator.Persistent);
 
-        PolygoniseJob polygonise = new PolygoniseJob(new NativeArray<Gridcell>(grids.ToArray(), Allocator.Persistent),
-                                                     new NativeArray<Vector3Int>(gridOffsets.ToArray(), Allocator.Persistent),
-                                                     isolevel,
-                                                     verticesNQ);
-
-        polygonise.Schedule(grids.Count, 64).Complete();
-
-        // Dispose inputs
-        polygonise.grids.Dispose();
-        polygonise.gridOffsets.Dispose();
-
-        // Output corresponding mesh points and triangle arrays
-        MeshifyJob meshify = new MeshifyJob(verticesNQ.ToNativeArray(Allocator.Persistent));
-        
-        verticesNQ.Dispose();
-
-        meshify.Schedule(meshify.vertices_out.Count(), 2).Complete();
-        
-        meshify.vertices_in.Dispose();
-        meshify.input_handled1.Dispose();
-        meshify.input_handled2.Dispose();
-
-        // Convert outputs to standard arrays and dispose
-        int[] triangles = meshify.triangles_out.ToArray();
-        meshify.triangles_out.Dispose();
-
-        Vector3[] vertices = meshify.vertices_out.ToArray();
-        meshify.vertices_out.Dispose();
-
-        // Get UV based on position
-        Vector2[] uv = new Vector2[vertices.Length];
-        for (int i = 0; i < uv.Length; i++)
+        var polygonise = new PolygoniseJob()
         {
-            uv[i] = new Vector2(vertices[i].x / dimensions.x, vertices[i].z / dimensions.z);
+            grids = grids,
+            gridOffsets = gridOffsets,
+            isolevel = isolevel,
+
+            triangleObjs = triangleObjs,
+        };
+
+        polygonise.Schedule(grids.Length, 128).Complete();
+
+        grids.Dispose();
+        gridOffsets.Dispose();
+
+        Dictionary<Vector3, int> vertexDictionary = new Dictionary<Vector3, int>();
+        List<int> triangles = new List<int>();
+
+        for (Triangle triangle; triangleObjs.TryDequeue(out triangle);)
+        {
+            foreach (Vector3 vertex in triangle.Verts)
+            {
+                if (!vertexDictionary.TryGetValue(vertex, out int vertexIndex))
+                {
+                    vertexIndex = vertexDictionary.Count;
+                    vertexDictionary.Add(vertex, vertexIndex);
+                }
+
+                triangles.Add(vertexIndex);
+            }
         }
+
+        triangleObjs.Dispose();
+
+        var vertices = new NativeArray<Vector3>(vertexDictionary.Keys.ToArray(), Allocator.TempJob);
+        var uv = new NativeArray<Vector2>(vertices.Length, Allocator.TempJob);
+
+        var getUV = new GetUVJob()
+        {
+            verts = vertices,
+            uv = uv,
+            dimensions = dimensions,
+        };
+        getUV.Schedule(uv.Length, 64).Complete();
 
         Mesh terrainMesh = new Mesh
         {
             name = "Terrain" + System.DateTime.UtcNow.ToFileTime().ToString() + " Mesh",
-            vertices = vertices,
-            triangles = triangles,
-            uv = uv,
+            vertices = vertices.ToArray(),
+            triangles = triangles.ToArray(),
+            uv = uv.ToArray(),
         };
+
+        vertices.Dispose();
+        uv.Dispose();
 
         terrainMesh.RecalculateBounds();
         terrainMesh.RecalculateTangents();
@@ -198,110 +210,27 @@ public class TerrainGenerator : MonoBehaviour
         public float isolevel;
 
         [WriteOnly]
-        public NativeQueue<Vector3>.Concurrent verts;
-
-        public PolygoniseJob(NativeArray<Gridcell> grids, NativeArray<Vector3Int> gridOffsets, float isolevel, NativeQueue<Vector3>.Concurrent verts)
-        {
-            this.grids = grids;
-            this.gridOffsets = gridOffsets;
-            this.isolevel = isolevel;
-
-            this.verts = verts;
-        }
+        public NativeQueue<Triangle>.Concurrent triangleObjs;
 
         public void Execute(int index)
         {
-            foreach (Triangle t in MarchingCubesCalc.Polygonise(grids[index], isolevel))
-            {
-                Vector3[] triangle = new Vector3[3];
+            Triangle[] tris = MarchingCubesCalc.Polygonise(grids[index], isolevel);
 
-                for(int i = 0; i < 3; i++)
-                {
-                    triangle[i] = t.Verts[i] + gridOffsets[index];
-                }
-
-                // Enqueue triangle points at the same time to keep them together
-                verts.Enqueue(triangle);
-            }
+            foreach (Triangle tri in tris)
+                triangleObjs.Enqueue(tri + gridOffsets[index]);
         }
     }
 
-    struct MeshifyJob : IJobParallelFor
+    struct GetUVJob : IJobParallelFor
     {
-        [ReadOnly]
-        public NativeArray<Vector3> vertices_in;
+        [ReadOnly] public NativeArray<Vector3> verts;
+        [ReadOnly] public Vector3Int dimensions;
 
-        // Using bytes because booleans aren't blittable
-        public NativeArray<byte> input_handled1;
-        public NativeArray<byte> input_handled2;
+        [WriteOnly] public NativeArray<Vector2> uv;
 
-        public NativeArray<Vector3> vertices_out;
-        public NativeArray<int> triangles_out;
-
-
-        public MeshifyJob(NativeArray<Vector3> vertices_in)
+        public void Execute(int index)
         {
-            this.vertices_in = vertices_in;
-
-            input_handled1 = new NativeArray<byte>(vertices_in.Length, Allocator.Persistent);
-            input_handled2 = new NativeArray<byte>(vertices_in.Length, Allocator.Persistent);
-
-            // Set triangle output size of the input and vertex output to number of distinct inputs
-            triangles_out = new NativeArray<int>(vertices_in.Length, Allocator.Persistent);
-            vertices_out = new NativeArray<Vector3>(vertices_in.Distinct(Vec3EqComparer.c).Count(), Allocator.Persistent);
-        }
-
-        public void Execute(int triIndex)
-        {
-            // Set our vert index to the index of triangle index
-            int vertIndex = triIndex;
-
-            // While another thread is handling or has handled this vertex
-            while (IsInputHandled(vertIndex))
-            {
-                // Look for another unless there is another then exit
-                if (vertIndex == vertices_in.Length)
-                    return;
-            }
-
-            // Set our vertex
-            Vector3 vertex = vertices_in[vertIndex];
-
-            // Add this vertex to the output at the index the triangle index and add triangle index to the output at the index of this vertex
-            vertices_out[triIndex] = vertex;
-            triangles_out[vertIndex] = triIndex;
-
-            // For the next vertices in the input
-            for (int i = vertIndex + 1; i < vertices_in.Length; i++)
-            {
-                // Skip if handled or isn't equal to our vertex
-                if (IsInputHandled(i) || vertex != vertices_in[i])
-                    continue;
-
-                // Mark this input as handled and at the index of this vertex add the index of the reference vertex
-                SetInputHandled(i, 1);
-                triangles_out[i] = triIndex;
-            }
-        }
-
-        bool IsInputHandled(int index)
-        {
-            bool handled = false;
-
-            try { handled |= input_handled1[index] == 1; }
-            catch { }
-            try { handled |= input_handled2[index] == 1; }
-            catch { }
-
-            return handled;
-        }
-
-        void SetInputHandled(int index, byte handled)
-        {
-            try { input_handled1[index] = handled; }
-            catch { }
-            try { input_handled2[index] = handled; }
-            catch { }
+            uv[index] = new Vector2(verts[index].x / dimensions.x, verts[index].z / dimensions.z);
         }
     }
 

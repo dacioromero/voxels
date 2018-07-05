@@ -5,7 +5,6 @@ using UnityEditor;
 public class TerrainGeneratorEditor : Editor
 {
     SerializedProperty isolevel;
-    SerializedProperty vertDistThreshold;
     SerializedProperty noiseScale;
     SerializedProperty octaves;
     SerializedProperty lacunarity;
@@ -18,7 +17,6 @@ public class TerrainGeneratorEditor : Editor
     private void OnEnable()
     {
         isolevel = serializedObject.FindProperty("isolevel");
-        vertDistThreshold = serializedObject.FindProperty("vertDistThreshold");
 
         noiseScale = serializedObject.FindProperty("noiseScale");
         octaves = serializedObject.FindProperty("octaves");
@@ -46,7 +44,6 @@ public class TerrainGeneratorEditor : Editor
 
         EditorGUILayout.LabelField("Mesh Settings", EditorStyles.boldLabel);
         EditorGUILayout.PropertyField(isolevel);
-        EditorGUILayout.PropertyField(vertDistThreshold);
         EditorGUILayout.Space();
 
         EditorGUILayout.LabelField("Voxel Settings", EditorStyles.boldLabel);
