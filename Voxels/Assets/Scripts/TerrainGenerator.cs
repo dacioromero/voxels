@@ -80,8 +80,8 @@ public class TerrainGenerator : MonoBehaviour
 
     Mesh GenerateMesh(float[,,] voxels)
     {
-        var grids = new NativeList<Gridcell>(Allocator.Persistent);
-        var gridOffsets = new NativeList<Vector3Int>(grids.Length, Allocator.Persistent);
+        var grids = new NativeList<Gridcell>(Allocator.TempJob);
+        var gridOffsets = new NativeList<Vector3Int>(Allocator.TempJob);
 
         for (int x = 0; x < dimensions.x - 1; x++)
         {
@@ -132,7 +132,7 @@ public class TerrainGenerator : MonoBehaviour
             }
         }
 
-        var triangleObjs = new NativeQueue<Triangle>(Allocator.Persistent);
+        var trianglesMC = new NativeQueue<Triangle>(Allocator.Persistent);
 
         var polygonise = new PolygoniseJob()
         {
@@ -140,34 +140,35 @@ public class TerrainGenerator : MonoBehaviour
             gridOffsets = gridOffsets,
             isolevel = isolevel,
 
-            triangleObjs = triangleObjs,
+            trianglesMC = trianglesMC,
         };
-
-        polygonise.Schedule(grids.Length, 128).Complete();
+        polygonise.Schedule(grids.Length, 64).Complete();
 
         grids.Dispose();
         gridOffsets.Dispose();
 
-        Dictionary<Vector3, int> vertexDictionary = new Dictionary<Vector3, int>();
-        List<int> triangles = new List<int>();
+        Dictionary<Vector3, int> vertexDictionary = new Dictionary<Vector3, int>(Vec3EqComparer.c);
+        NativeList<Vector3> vertices = new NativeList<Vector3>(Allocator.TempJob);
+        NativeList<int> triangles = new NativeList<int>(Allocator.TempJob);
 
-        for (Triangle triangle; triangleObjs.TryDequeue(out triangle);)
+        while (trianglesMC.TryDequeue(out Triangle triangle))
         {
             foreach (Vector3 vertex in triangle.Verts)
             {
                 if (!vertexDictionary.TryGetValue(vertex, out int vertexIndex))
                 {
                     vertexIndex = vertexDictionary.Count;
+
                     vertexDictionary.Add(vertex, vertexIndex);
+                    vertices.Add(vertex);
                 }
 
                 triangles.Add(vertexIndex);
             }
         }
 
-        triangleObjs.Dispose();
-
-        var vertices = new NativeArray<Vector3>(vertexDictionary.Keys.ToArray(), Allocator.TempJob);
+        trianglesMC.Dispose();
+        
         var uv = new NativeArray<Vector2>(vertices.Length, Allocator.TempJob);
 
         var getUV = new GetUVJob()
@@ -187,6 +188,7 @@ public class TerrainGenerator : MonoBehaviour
         };
 
         vertices.Dispose();
+        triangles.Dispose();
         uv.Dispose();
 
         terrainMesh.RecalculateBounds();
@@ -202,23 +204,13 @@ public class TerrainGenerator : MonoBehaviour
 
     struct PolygoniseJob : IJobParallelFor
     {
-        [ReadOnly]
-        public NativeArray<Gridcell> grids;
-        [ReadOnly]
-        public NativeArray<Vector3Int> gridOffsets;
-        [ReadOnly]
-        public float isolevel;
+        [ReadOnly] public NativeArray<Gridcell> grids;
+        [ReadOnly] public NativeArray<Vector3Int> gridOffsets;
+        [ReadOnly] public float isolevel;
 
-        [WriteOnly]
-        public NativeQueue<Triangle>.Concurrent triangleObjs;
+        [WriteOnly] public NativeQueue<Triangle>.Concurrent trianglesMC;
 
-        public void Execute(int index)
-        {
-            Triangle[] tris = MarchingCubesCalc.Polygonise(grids[index], isolevel);
-
-            foreach (Triangle tri in tris)
-                triangleObjs.Enqueue(tri + gridOffsets[index]);
-        }
+        public void Execute(int index) => trianglesMC.Enqueue(MarchingCubesCalc.Polygonise(grids[index], gridOffsets[index], isolevel));
     }
 
     struct GetUVJob : IJobParallelFor

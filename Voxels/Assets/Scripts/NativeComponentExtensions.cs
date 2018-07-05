@@ -6,38 +6,6 @@ namespace NativeComponentExtensions
 {
     public static class Extensions
     {
-        public static T[] ToArray<T>(this NativeQueue<T> q) where T : struct
-        {
-            T[] a = new T[q.Count];
-
-            for (int i = 0; i < a.Length; i++)
-            {
-                a[i] = q.Dequeue();
-                q.Enqueue(a[i]);
-            }
-
-            return a;
-        }
-
-        public static NativeArray<T> ToNativeArray<T>(this NativeQueue<T> q, Allocator alloc) where T : struct
-        {
-            NativeArray<T> a = new NativeArray<T>(q.Count, alloc);
-
-            for (int i = 0; i < a.Length; i++)
-            {
-                a[i] = q.Dequeue();
-                q.Enqueue(a[i]);
-            }
-
-            return a;
-        }
-
-        public static bool Contains<T>(this NativeQueue<T> q, T val, out int index) where T : struct
-        {
-            index = Array.IndexOf(q.ToArray(), val);
-            return index > -1;
-        }
-
         public static void Enqueue<T>(this NativeQueue<T>.Concurrent q, T[] vals) where T : struct
         {
             foreach(T val in vals)

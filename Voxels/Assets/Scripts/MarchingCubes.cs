@@ -393,7 +393,7 @@ namespace MarchingCubes
             {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
         };
 
-        public static Triangle[] Polygonise(float val1, float val2, float val3, float val4, float val5, float val6, float val7, float val8, float isolevel)
+        public static Triangle[] Polygonise(float val1, float val2, float val3, float val4, float val5, float val6, float val7, float val8, Vector3 offset, float isolevel)
         {
             int cubeindex = 0;
 
@@ -454,17 +454,17 @@ namespace MarchingCubes
 
             for (int i = 0; triTable[cubeindex, i] != -1; i += 3)
             {
-                triangles.Add(new Triangle(vertlist[triTable[cubeindex, i]],
-                                           vertlist[triTable[cubeindex, i + 1]],
-                                           vertlist[triTable[cubeindex, i + 2]]));
+                triangles.Add(new Triangle(vertlist[triTable[cubeindex, i    ]] + offset,
+                                           vertlist[triTable[cubeindex, i + 1]] + offset,
+                                           vertlist[triTable[cubeindex, i + 2]] + offset));
             }
 
             return triangles.ToArray();
         }
 
-        public static Triangle[] Polygonise(Gridcell grid, float isolevel)
+        public static Triangle[] Polygonise(Gridcell grid, Vector3 offset, float isolevel)
         {
-            return Polygonise(grid.val1, grid.val2, grid.val3, grid.val4, grid.val5, grid.val6, grid.val7, grid.val8, isolevel);
+            return Polygonise(grid.val1, grid.val2, grid.val3, grid.val4, grid.val5, grid.val6, grid.val7, grid.val8, offset, isolevel);
         }
 
         static Vector3 VertexInterp(float isolevel, Vector3 p1, Vector3 p2, float valp1, float valp2)
