@@ -53,16 +53,13 @@ namespace MarchingCubes
 
         public float[] Vals { get => new float[] { val1, val2, val3, val4, val5, val6, val7, val8 }; }
 
-        public bool Equals(Gridcell g)
-        {
-            return val1 == g.val1 &&
-                   val2 == g.val2 &&
-                   val3 == g.val3 &&
-                   val4 == g.val4 &&
-                   val5 == g.val5 &&
-                   val6 == g.val6 &&
-                   val7 == g.val7 &&
-                   val8 == g.val8;
-        }
+        public bool Equals(Gridcell g) => val1 == g.val1 &&
+                                          val2 == g.val2 &&
+                                          val3 == g.val3 &&
+                                          val4 == g.val4 &&
+                                          val5 == g.val5 &&
+                                          val6 == g.val6 &&
+                                          val7 == g.val7 &&
+                                          val8 == g.val8;
     }
 }
