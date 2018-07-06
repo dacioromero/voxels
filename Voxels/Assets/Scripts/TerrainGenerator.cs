@@ -16,19 +16,13 @@ using System.Linq;
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer)), DisallowMultipleComponent]
 public class TerrainGenerator : MonoBehaviour
 {
-    [SerializeField, Range(0, 1)]
-    private float isolevel = 0.5f, persistence = 0.5f;
-    [SerializeField]
-    private float noiseScale = 100, lacunarity = 2;
-    [SerializeField]
-    private int octaves = 16, seed;
+    [SerializeField, Range(0, 1)] private float isolevel = 0.5f, persistence = 0.5f;
+    [SerializeField] private float noiseScale = 100, lacunarity = 2;
+    [SerializeField] private int octaves = 16, seed;
 
-    [SerializeField]
-    private Vector2 offset;
-    [SerializeField]
-    private TerrainType[] regions;
-    [SerializeField]
-    private Vector3Int dimensions;
+    [SerializeField] private Vector2 offset;
+    [SerializeField] private TerrainType[] regions;
+    [SerializeField] private Vector3Int dimensions;
 
     public void Generate()
     {
@@ -36,12 +30,10 @@ public class TerrainGenerator : MonoBehaviour
 
         GetComponent<MeshFilter>().sharedMesh = GetComponent<MeshCollider>().sharedMesh = GenerateMesh(chunk.voxels);
 
-        Material material = new Material(Shader.Find("Legacy Shaders/Diffuse"))
+        GetComponent<MeshRenderer>().material = new Material(Shader.Find("Legacy Shaders/Diffuse"))
         {
             mainTexture = GenerateTexture(chunk.NoiseMap)
         };
-
-        GetComponent<MeshRenderer>().material = material;
     }
 
     Texture2D GenerateTexture(float[,] noiseMap)
@@ -54,11 +46,9 @@ public class TerrainGenerator : MonoBehaviour
         {
             for (int x = 0; x < dimensions.x; x++)
             {
-                float currentHeight = noiseMap[x, y];
-
                 for (int i = 0; i < regions.Length; i++)
                 {
-                    if (currentHeight <= regions[i].height)
+                    if (noiseMap[x, y] <= regions[i].height)
                     {
                         colorMap[y * dimensions.x + x] = regions[i].color.Evaluate(Random.value);
                         break;
@@ -67,11 +57,9 @@ public class TerrainGenerator : MonoBehaviour
             }
         }
 
-        Texture2D terrainTexture = TextureGenerator.TextureFromColourMap(colorMap, dimensions.x, dimensions.z);
-
         string id = "Terrain" + System.DateTime.UtcNow.ToFileTime().ToString();
 
-        AssetDatabase.CreateAsset(terrainTexture, "Assets/Terrain Data/" + id + " Texture.asset");
+        AssetDatabase.CreateAsset(TextureGenerator.TextureFromColourMap(colorMap, dimensions.x, dimensions.z), "Assets/Terrain Data/" + id + " Texture.asset");
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
 
@@ -121,8 +109,7 @@ public class TerrainGenerator : MonoBehaviour
                         };
                     }
 
-                    if (gridcell.Equals(Gridcell.one) || gridcell.Equals(Gridcell.zero))
-                        continue;
+                    if (gridcell.Equals(Gridcell.one) || gridcell.Equals(Gridcell.zero)) continue;
 
                     int index = x + dimensions.y * (y + (dimensions.z - 1) * z);
 
@@ -134,21 +121,19 @@ public class TerrainGenerator : MonoBehaviour
 
         var trianglesMC = new NativeQueue<Triangle>(Allocator.Persistent);
 
-        var polygonise = new PolygoniseJob()
+        new PolygoniseJob()
         {
             grids = grids,
             gridOffsets = gridOffsets,
             isolevel = isolevel,
 
             trianglesMC = trianglesMC,
-        };
-        polygonise.Schedule(grids.Length, 64).Complete();
+        }.Schedule(grids.Length, 64).Complete();
 
         grids.Dispose();
         gridOffsets.Dispose();
 
         Dictionary<Vector3, int> vertexDictionary = new Dictionary<Vector3, int>(Vec3EqComparer.c);
-        NativeList<Vector3> vertices = new NativeList<Vector3>(Allocator.TempJob);
         NativeList<int> triangles = new NativeList<int>(Allocator.TempJob);
 
         while (trianglesMC.TryDequeue(out Triangle triangle))
@@ -158,26 +143,25 @@ public class TerrainGenerator : MonoBehaviour
                 if (!vertexDictionary.TryGetValue(vertex, out int vertexIndex))
                 {
                     vertexIndex = vertexDictionary.Count;
-
                     vertexDictionary.Add(vertex, vertexIndex);
-                    vertices.Add(vertex);
                 }
 
                 triangles.Add(vertexIndex);
             }
         }
 
+        var vertices = new NativeArray<Vector3>(vertexDictionary.Keys.ToArray(), Allocator.TempJob);
+
         trianglesMC.Dispose();
-        
+
         var uv = new NativeArray<Vector2>(vertices.Length, Allocator.TempJob);
 
-        var getUV = new GetUVJob()
+        new GetUVJob()
         {
             verts = vertices,
             uv = uv,
             dimensions = dimensions,
-        };
-        getUV.Schedule(uv.Length, 64).Complete();
+        }.Schedule(uv.Length, 64).Complete();
 
         Mesh terrainMesh = new Mesh
         {
@@ -220,10 +204,7 @@ public class TerrainGenerator : MonoBehaviour
 
         [WriteOnly] public NativeArray<Vector2> uv;
 
-        public void Execute(int index)
-        {
-            uv[index] = new Vector2(verts[index].x / dimensions.x, verts[index].z / dimensions.z);
-        }
+        public void Execute(int index) => uv[index] = new Vector2(verts[index].x / dimensions.x, verts[index].z / dimensions.z);
     }
 
     void OnValidate()
@@ -242,29 +223,5 @@ public class TerrainGenerator : MonoBehaviour
 
         if (dimensions.z < 1)
             dimensions.z = 1;
-    }
-}
-
-[System.Serializable]
-public struct TerrainType
-{
-    public string name;
-    public float height;
-    public Gradient color;
-}
-
-// Default Equals method is more accurate == operator is more lenient
-public class Vec3EqComparer : IEqualityComparer<Vector3>
-{
-    static public Vec3EqComparer c = new Vec3EqComparer();
-
-    public bool Equals(Vector3 x, Vector3 y)
-    {
-        return x == y;
-    }
-
-    public int GetHashCode(Vector3 obj)
-    {
-        return obj.GetHashCode();
     }
 }

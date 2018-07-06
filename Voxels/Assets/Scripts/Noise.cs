@@ -2,17 +2,18 @@ using UnityEngine;
 
 /* 
  * Adapted from https://github.com/SebLague/Procedural-Landmass-Generation/blob/2c519dac25f350365f95a83a3f973a9e6d3e1b83/Proc%20Gen%20E04/Assets/Scripts/Noise.cs 
- * under MIT License https://github.com/SebLague/Procedural-Landmass-Generation/blob/2c519dac25f350365f95a83a3f973a9e6d3e1b83/LICENSE.md, retrieved in April 2018
+ * under the MIT License https://github.com/SebLague/Procedural-Landmass-Generation/blob/2c519dac25f350365f95a83a3f973a9e6d3e1b83/LICENSE.md, retrieved in April 2018
  */
 
 public static class Noise
-{   
+{
     public static float[,] GenerateNoiseMap(int mapWidth, int mapHeight, int seed, float scale, int octaves, float persistence, float lacunarity, Vector2 offset)
     {
         float[,] noiseMap = new float[mapWidth, mapHeight];
 
         System.Random prng = new System.Random(seed);
         Vector2[] octaveOffsets = new Vector2[octaves];
+
         for (int i = 0; i < octaves; i++)
         {
             float offsetX = prng.Next(-100000, 100000) + offset.x;
@@ -21,9 +22,7 @@ public static class Noise
         }
 
         if (scale <= 0)
-        {
             scale = 0.0001f;
-        }
 
         float maxNoiseHeight = float.MinValue;
         float minNoiseHeight = float.MaxValue;
@@ -53,25 +52,18 @@ public static class Noise
                 }
 
                 if (noiseHeight > maxNoiseHeight)
-                {
                     maxNoiseHeight = noiseHeight;
-                }
+
                 else if (noiseHeight < minNoiseHeight)
-                {
                     minNoiseHeight = noiseHeight;
-                }
 
                 noiseMap[x, y] = noiseHeight;
             }
         }
 
         for (int y = 0; y < mapHeight; y++)
-        {
             for (int x = 0; x < mapWidth; x++)
-            {
                 noiseMap[x, y] = Mathf.InverseLerp(minNoiseHeight, maxNoiseHeight, noiseMap[x, y]);
-            }
-        }
 
         return noiseMap;
     }

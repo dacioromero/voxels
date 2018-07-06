@@ -2,17 +2,19 @@ using UnityEngine;
 
 /* 
  * Adapted from https://github.com/SebLague/Procedural-Landmass-Generation/blob/2c519dac25f350365f95a83a3f973a9e6d3e1b83/Proc%20Gen%20E04/Assets/Scripts/TextureGenerator.cs 
- * under MIT License https://github.com/SebLague/Procedural-Landmass-Generation/blob/2c519dac25f350365f95a83a3f973a9e6d3e1b83/LICENSE.md, retrieved in April 2018
+ * under the MIT License https://github.com/SebLague/Procedural-Landmass-Generation/blob/2c519dac25f350365f95a83a3f973a9e6d3e1b83/LICENSE.md, retrieved in April 2018
  */
 
 public static class TextureGenerator
 {
     public static Texture2D TextureFromColourMap(Color[] colorMap, int width, int height)
     {
-        Texture2D texture = new Texture2D(width, height);
+        Texture2D texture = new Texture2D(width, height)
+        {
+            filterMode = FilterMode.Point,
+            wrapMode = TextureWrapMode.Clamp,
+        };
 
-        texture.filterMode = FilterMode.Point;
-        texture.wrapMode = TextureWrapMode.Clamp;
         texture.SetPixels(colorMap);
         texture.Apply();
 
@@ -27,12 +29,8 @@ public static class TextureGenerator
         Color[] colorMap = new Color[width * height];
 
         for (int y = 0; y < height; y++)
-        {
             for (int x = 0; x < width; x++)
-            {
                 colorMap[y * width + x] = Color.Lerp(Color.black, Color.white, heightMap[x, y]);
-            }
-        }
 
         return TextureFromColourMap(colorMap, width, height);
     }

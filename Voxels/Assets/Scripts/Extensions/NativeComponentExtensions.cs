@@ -1,5 +1,4 @@
-﻿using System;
-using Unity.Collections;
+﻿using Unity.Collections;
 using Unity.Mathematics;
 
 namespace NativeComponentExtensions
@@ -8,24 +7,19 @@ namespace NativeComponentExtensions
     {
         public static void Enqueue<T>(this NativeQueue<T>.Concurrent q, T[] vals) where T : struct
         {
-            foreach(T val in vals)
-            {
+            foreach (T val in vals)
                 q.Enqueue(val);
-            }
         }
 
-        public static void Enqueue<T>(this NativeQueue<T> q, T[] vals) where T : struct
-        {
-            q.Enqueue(vals);
-        }
+        public static void Enqueue<T>(this NativeQueue<T> q, T[] vals) where T : struct => q.Enqueue(vals);
 
         public static int[] Flatten(this int3[] int3s)
         {
             int[] ints = new int[int3s.Length * 3];
 
-            for(int i = 0; i < int3s.Length; i++)
+            for (int i = 0; i < int3s.Length; i++)
             {
-                ints[i    ] = int3s[i].x;
+                ints[i] = int3s[i].x;
                 ints[i + 1] = int3s[i].y;
                 ints[i + 2] = int3s[i].z;
             }
@@ -51,7 +45,7 @@ namespace NativeComponentExtensions
         {
             index = -1;
 
-            for(int i = 0; i < nativeList.Length; i++)
+            for (int i = 0; i < nativeList.Length; i++)
             {
                 if (nativeList[i].Equals(obj))
                 {
