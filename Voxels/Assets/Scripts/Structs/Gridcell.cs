@@ -40,8 +40,6 @@ namespace MarchingCubes
     public static Vector3Int p7 = new Vector3Int(1, 1, 1);
     public static Vector3Int p8 = new Vector3Int(1, 1, 0);
 
-    public static Vector3Int[] Ps { get => new Vector3Int[] { p1, p2, p3, p4, p5, p6, p7 }; }
-
     public float val1;
     public float val2;
     public float val3;

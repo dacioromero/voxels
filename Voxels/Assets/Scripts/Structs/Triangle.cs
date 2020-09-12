@@ -19,6 +19,4 @@ public struct Triangle
   }
 
   public bool Equals(Triangle t) => t.v1.Equals(v1) && t.v2.Equals(v2) && t.v3.Equals(v3);
-
-  public static Triangle operator +(Triangle t, Vector3 o) => new Triangle(t.v1 + o, t.v2 + o, t.v2 + o);
 }

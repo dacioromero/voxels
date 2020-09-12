@@ -29,8 +29,6 @@ public struct VoxelChunk
     }
   }
 
-  public VoxelChunk(float[,,] voxels) => this.voxels = voxels;
-
   public static VoxelChunk Generate(Vector3Int dimensions, int seed, float scale, int octaves, float persistence, float lacunarity, Vector2 offset)
   {
     VoxelChunk chunk = new VoxelChunk();
