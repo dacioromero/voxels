@@ -126,7 +126,7 @@ public class TerrainGenerator : MonoBehaviour
       gridOffsets = gridOffsets,
       isolevel = isolevel,
 
-      trianglesMC = trianglesMC.ToConcurrent(),
+      trianglesMC = trianglesMC.AsParallelWriter(),
     }.Schedule(grids.Length, 64).Complete();
 
     grids.Dispose();
@@ -191,7 +191,7 @@ public class TerrainGenerator : MonoBehaviour
     [ReadOnly] public NativeArray<Vector3Int> gridOffsets;
     [ReadOnly] public float isolevel;
 
-    [WriteOnly] public NativeQueue<Triangle>.Concurrent trianglesMC;
+    [WriteOnly] public NativeQueue<Triangle>.ParallelWriter trianglesMC;
 
     public void Execute(int index) => trianglesMC.Enqueue(MarchingCubesCalc.Polygonise(grids[index], gridOffsets[index], isolevel));
   }

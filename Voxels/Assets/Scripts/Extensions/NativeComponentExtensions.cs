@@ -4,7 +4,7 @@ namespace NativeComponentExtensions
 {
   public static class Extensions
   {
-    public static void Enqueue<T>(this NativeQueue<T>.Concurrent q, T[] vals) where T : struct
+    public static void Enqueue<T>(this NativeQueue<T>.ParallelWriter q, T[] vals) where T : struct
     {
       foreach (T val in vals)
         q.Enqueue(val);
