@@ -127,7 +127,7 @@ public class TerrainGenerator : MonoBehaviour
             gridOffsets = gridOffsets,
             isolevel = isolevel,
 
-            trianglesMC = trianglesMC,
+            trianglesMC = trianglesMC.ToConcurrent(),
         }.Schedule(grids.Length, 64).Complete();
 
         grids.Dispose();
