@@ -1,5 +1,4 @@
 ﻿using Unity.Collections;
-using Unity.Mathematics;
 
 namespace NativeComponentExtensions
 {

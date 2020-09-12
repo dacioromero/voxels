@@ -1,6 +1,5 @@
 using UnityEditor;
 using UnityEngine;
-using Unity.Entities;
 using NativeComponentExtensions;
 using Unity.Jobs;
 using Unity.Collections;
