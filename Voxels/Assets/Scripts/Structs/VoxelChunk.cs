@@ -16,10 +16,8 @@ public struct VoxelChunk
   public VoxelChunk(Vector3Int dimensions, float[,] noiseMap, float isolevel)
   {
     this.dimensions = dimensions;
-    isoLevel = isolevel;
-    voxels = new float[this.dimensions.x, this.dimensions.y, this.dimensions.z];
-
-    Vector3 center = (Vector3)dimensions / 2;
+    this.isoLevel = isolevel;
+    this.voxels = new float[this.dimensions.x, this.dimensions.y, this.dimensions.z];
 
     for (int x = 0; x < dimensions.x; x++)
     {

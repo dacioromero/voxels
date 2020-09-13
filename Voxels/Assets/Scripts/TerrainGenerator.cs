@@ -33,14 +33,14 @@ public class TerrainGenerator : MonoBehaviour
     };
   }
 
-  void Awake ()
+  void Awake()
   {
     meshFilter = GetComponent<MeshFilter>();
     meshCollider = GetComponent<MeshCollider>();
     meshRenderer = GetComponent<MeshRenderer>();
   }
 
-  void Start ()
+  void Start()
   {
     if (Application.isPlaying)
       Generate();
@@ -89,5 +89,7 @@ public class TerrainGenerator : MonoBehaviour
 
     if (dimensions.z < 1)
       dimensions.z = 1;
+
+    Generate();
   }
 }

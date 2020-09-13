@@ -1,5 +1,4 @@
-﻿using System.Linq;
-using Unity.Mathematics;
+﻿using Unity.Mathematics;
 
 public struct Triangle
 {
@@ -18,6 +17,4 @@ public struct Triangle
     this.vertex2 = vertex2;
     this.vertex3 = vertex3;
   }
-
-  public bool Equals(Triangle t) => vertices.SequenceEqual(t.vertices);
 }

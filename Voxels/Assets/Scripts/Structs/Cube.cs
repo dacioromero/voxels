@@ -303,7 +303,6 @@ namespace MarchingCubes
     };
 
     public static readonly Cube one = new Cube(int3.zero, 1, 1, 1, 1, 1, 1, 1, 1);
-
     public static readonly Cube zero = new Cube(int3.zero, 0, 0, 0, 0, 0, 0, 0, 0);
 
     public static readonly int3 point1 = new int3(0, 0, 0);
@@ -405,13 +404,13 @@ namespace MarchingCubes
 
       var triangleList = new NativeList<Triangle>(5, Allocator.Temp);
 
-      for (int i = 0; triTable[cubeindex * 16  + i] != -1; i += 3)
+      for (int i = 0; triTable[cubeindex * 16 + i] != -1; i += 3)
       {
         var triangle = new Triangle
         (
-          vertlist[triTable[cubeindex * 16  + i]] + offset,
-          vertlist[triTable[cubeindex * 16  + i + 1]] + offset,
-          vertlist[triTable[cubeindex * 16  + i + 2]] + offset
+          vertlist[triTable[cubeindex * 16 + i]] + offset,
+          vertlist[triTable[cubeindex * 16 + i + 1]] + offset,
+          vertlist[triTable[cubeindex * 16 + i + 2]] + offset
         );
 
         triangleList.Add(triangle);
