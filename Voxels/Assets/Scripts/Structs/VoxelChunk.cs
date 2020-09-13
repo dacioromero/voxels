@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using MarchingCubes;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
@@ -93,6 +94,7 @@ public struct VoxelChunk
     trianglesQueue.Dispose();
 
     Vector3[] vertices = vertexDictionary.Keys.ToArray();
+    int[] triangles = triangleList.ToArray();
     var uv = new Vector2[vertices.Length];
 
     for (int i = 0; i < uv.Length; i++)
@@ -104,11 +106,12 @@ public struct VoxelChunk
     {
       name = $"Terrain{System.DateTime.UtcNow.ToFileTime().ToString()} Mesh",
       vertices = vertices,
-      triangles = triangleList.ToArray(),
+      triangles = triangles,
       uv = uv,
     };
   }
 
+  [BurstCompile]
   struct PolygoniseJob : IJobParallelFor
   {
     [ReadOnly] public NativeArray<Cube> cubes;
@@ -121,12 +124,14 @@ public struct VoxelChunk
 
       if (!cube.Equals(Cube.one) && !cube.Equals(Cube.zero))
       {
-        Triangle[] triangles = cube.Polygonise(isolevel);
+        NativeArray<Triangle> triangles = cube.Polygonise(isolevel);
 
-        foreach (Triangle triangle in triangles)
+        for (int i = 0; i < triangles.Length; i++)
         {
-          trianglesQueue.Enqueue(triangle);
+          trianglesQueue.Enqueue(triangles[i]);
         }
+
+        triangles.Dispose();
       }
     }
   }

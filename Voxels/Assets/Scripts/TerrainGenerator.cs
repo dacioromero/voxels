@@ -6,7 +6,7 @@ using UnityEngine;
  * under the MIT License https://github.com/SebLague/Procedural-Landmass-Generation/blob/2c519dac25f350365f95a83a3f973a9e6d3e1b83/LICENSE.md, retrieved in April 2018
  */
 
-[RequireComponent(typeof(MeshFilter), typeof(MeshRenderer)), DisallowMultipleComponent]
+[RequireComponent(typeof(MeshFilter), typeof(MeshCollider), typeof(MeshRenderer)), DisallowMultipleComponent, ExecuteInEditMode]
 public class TerrainGenerator : MonoBehaviour
 {
   [SerializeField, Range(0, 1)] private float isolevel = 0.5f, persistence = 0.5f;
@@ -17,16 +17,33 @@ public class TerrainGenerator : MonoBehaviour
   [SerializeField] private TerrainType[] regions;
   [SerializeField] private Vector3Int dimensions;
 
+  private MeshFilter meshFilter;
+  private MeshCollider meshCollider;
+  private MeshRenderer meshRenderer;
+
   public void Generate()
   {
     float[,] noiseMap = Noise.GenerateNoiseMap(dimensions.x, dimensions.z, seed, noiseScale, octaves, persistence, lacunarity, offset);
 
-    GetComponent<MeshFilter>().sharedMesh = GetComponent<MeshCollider>().sharedMesh = new VoxelChunk(dimensions, noiseMap, isolevel).GenerateMesh();
+    meshFilter.sharedMesh = meshCollider.sharedMesh = new VoxelChunk(dimensions, noiseMap, isolevel).GenerateMesh();
 
-    GetComponent<MeshRenderer>().material = new Material(Shader.Find("Legacy Shaders/Diffuse"))
+    meshRenderer.material = new Material(Shader.Find("Legacy Shaders/Diffuse"))
     {
       mainTexture = GenerateTexture(noiseMap)
     };
+  }
+
+  void Awake ()
+  {
+    meshFilter = GetComponent<MeshFilter>();
+    meshCollider = GetComponent<MeshCollider>();
+    meshRenderer = GetComponent<MeshRenderer>();
+  }
+
+  void Start ()
+  {
+    if (Application.isPlaying)
+      Generate();
   }
 
   Texture2D GenerateTexture(float[,] noiseMap)
