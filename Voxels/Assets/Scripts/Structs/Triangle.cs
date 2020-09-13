@@ -1,22 +1,23 @@
-﻿using UnityEngine;
+﻿using System.Linq;
+using Unity.Mathematics;
 
-// Adapted from http://paulbourke.net/geometry/polygonise/, retreived in April 2018
-
-[System.Serializable]//, Unity.Burst.BurstCompile]
 public struct Triangle
 {
-  public Vector3 v1;
-  public Vector3 v2;
-  public Vector3 v3;
+  public float3 vertex1;
+  public float3 vertex2;
+  public float3 vertex3;
 
-  public Vector3[] Verts { get => new Vector3[] { v1, v2, v3 }; }
-
-  public Triangle(Vector3 v1, Vector3 v2, Vector3 v3)
+  public float3[] vertices
   {
-    this.v1 = v1;
-    this.v2 = v2;
-    this.v3 = v3;
+    get => new float3[] { vertex1, vertex2, vertex3 };
   }
 
-  public bool Equals(Triangle t) => t.v1.Equals(v1) && t.v2.Equals(v2) && t.v3.Equals(v3);
+  public Triangle(float3 vertex1, float3 vertex2, float3 vertex3)
+  {
+    this.vertex1 = vertex1;
+    this.vertex2 = vertex2;
+    this.vertex3 = vertex3;
+  }
+
+  public bool Equals(Triangle t) => vertices.SequenceEqual(t.vertices);
 }

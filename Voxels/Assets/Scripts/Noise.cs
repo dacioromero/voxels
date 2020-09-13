@@ -61,8 +61,12 @@ public static class Noise
     }
 
     for (int y = 0; y < mapHeight; y++)
+    {
       for (int x = 0; x < mapWidth; x++)
+      {
         noiseMap[x, y] = Mathf.InverseLerp(minNoiseHeight, maxNoiseHeight, noiseMap[x, y]);
+      }
+    }
 
     return noiseMap;
   }
