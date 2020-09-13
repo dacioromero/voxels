@@ -9,7 +9,7 @@ public static class TextureGenerator
 {
   public static Texture2D TextureFromColourMap(Color[] colorMap, int width, int height)
   {
-    Texture2D texture = new Texture2D(width, height)
+    var texture = new Texture2D(width, height)
     {
       filterMode = FilterMode.Point,
       wrapMode = TextureWrapMode.Clamp,

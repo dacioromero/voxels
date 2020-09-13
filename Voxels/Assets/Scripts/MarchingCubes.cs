@@ -319,7 +319,7 @@ namespace MarchingCubes
       if (edgeTable[cubeindex] == 0)
         return new Triangle[0];
 
-      Vector3[] vertlist = new Vector3[12];
+      var vertlist = new Vector3[12];
 
       #region VertexInterps
       if ((edgeTable[cubeindex] & 1) > 0)
@@ -348,7 +348,7 @@ namespace MarchingCubes
         vertlist[11] = VertexInterp(isolevel, Gridcell.p4, Gridcell.p8, val4, val8);
       #endregion
 
-      List<Triangle> triangles = new List<Triangle>(5);
+      var triangles = new List<Triangle>(5);
 
       for (int i = 0; triTable[cubeindex, i] != -1; i += 3)
       {

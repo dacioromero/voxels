@@ -37,7 +37,7 @@ public class TerrainGenerator : MonoBehaviour
 
   Texture2D GenerateTexture(float[,] noiseMap)
   {
-    Color[] colorMap = new Color[dimensions.x * dimensions.z];
+    var colorMap = new Color[dimensions.x * dimensions.z];
 
     Random.InitState(seed);
 
@@ -56,13 +56,16 @@ public class TerrainGenerator : MonoBehaviour
       }
     }
 
-    string id = "Terrain" + System.DateTime.UtcNow.ToFileTime().ToString();
+    Texture2D texture = TextureGenerator.TextureFromColourMap(colorMap, dimensions.x, dimensions.z);
+    texture.name = $"Terrain{System.DateTime.UtcNow.ToFileTime().ToString()} Texture";
 
-    AssetDatabase.CreateAsset(TextureGenerator.TextureFromColourMap(colorMap, dimensions.x, dimensions.z), "Assets/Terrain Data/" + id + " Texture.asset");
+    var assetName = $"Assets/Terrain Data/{texture.name}.asset";
+
+    AssetDatabase.CreateAsset(texture, assetName);
     AssetDatabase.SaveAssets();
     AssetDatabase.Refresh();
 
-    return (Texture2D)AssetDatabase.LoadAssetAtPath("Assets/Terrain Data/" + id + " Texture.asset", typeof(Texture2D));
+    return AssetDatabase.LoadAssetAtPath<Texture2D>(assetName);
   }
 
   Mesh GenerateMesh(float[,,] voxels)
@@ -132,8 +135,8 @@ public class TerrainGenerator : MonoBehaviour
     grids.Dispose();
     gridOffsets.Dispose();
 
-    Dictionary<Vector3, int> vertexDictionary = new Dictionary<Vector3, int>(Vec3EqComparer.c);
-    NativeList<int> triangles = new NativeList<int>(Allocator.TempJob);
+    var vertexDictionary = new Dictionary<Vector3, int>(Vec3EqComparer.c);
+    var triangles = new NativeList<int>(Allocator.TempJob);
 
     while (trianglesMC.TryDequeue(out Triangle triangle))
     {
@@ -162,9 +165,9 @@ public class TerrainGenerator : MonoBehaviour
       dimensions = dimensions,
     }.Schedule(uv.Length, 64).Complete();
 
-    Mesh terrainMesh = new Mesh
+    var terrainMesh = new Mesh()
     {
-      name = "Terrain" + System.DateTime.UtcNow.ToFileTime().ToString() + " Mesh",
+      name = $"Terrain{System.DateTime.UtcNow.ToFileTime().ToString()} Mesh",
       vertices = vertices.ToArray(),
       triangles = triangles.ToArray(),
       uv = uv.ToArray(),
@@ -178,11 +181,13 @@ public class TerrainGenerator : MonoBehaviour
     terrainMesh.RecalculateTangents();
     terrainMesh.RecalculateNormals();
 
-    AssetDatabase.CreateAsset(terrainMesh, "Assets/Terrain Data/" + terrainMesh.name + ".asset");
+    var assetName = $"Assets/Terrain Data/{terrainMesh.name}.asset";
+
+    AssetDatabase.CreateAsset(terrainMesh, assetName);
     AssetDatabase.SaveAssets();
     AssetDatabase.Refresh();
 
-    return (Mesh)AssetDatabase.LoadAssetAtPath("Assets/Terrain Data/" + terrainMesh.name + ".asset", typeof(Mesh));
+    return AssetDatabase.LoadAssetAtPath<Mesh>(assetName);
   }
 
   struct PolygoniseJob : IJobParallelFor
