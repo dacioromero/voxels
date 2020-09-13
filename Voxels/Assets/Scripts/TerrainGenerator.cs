@@ -70,8 +70,7 @@ public class TerrainGenerator : MonoBehaviour
 
   Mesh GenerateMesh(float[,,] voxels)
   {
-    var grids = new NativeList<Gridcell>(Allocator.TempJob);
-    var gridOffsets = new NativeList<Vector3Int>(Allocator.TempJob);
+    var gridsAndOffsets = new NativeList<GridAndOffset>(Allocator.TempJob);
 
     for (int x = 0; x < dimensions.x - 1; x++)
     {
@@ -115,8 +114,13 @@ public class TerrainGenerator : MonoBehaviour
 
           int index = x + dimensions.y * (y + (dimensions.z - 1) * z);
 
-          grids.Add(gridcell);
-          gridOffsets.Add(new Vector3Int(x, y, z));
+          var gridWithOffset = new GridAndOffset()
+          {
+            grid = gridcell,
+            offset = new Vector3Int(x, y, z)
+          };
+
+          gridsAndOffsets.Add(gridWithOffset);
         }
       }
     }
@@ -125,15 +129,12 @@ public class TerrainGenerator : MonoBehaviour
 
     new PolygoniseJob()
     {
-      grids = grids,
-      gridOffsets = gridOffsets,
+      gridsAndOffsets = gridsAndOffsets,
       isolevel = isolevel,
-
       trianglesMC = trianglesMC.AsParallelWriter(),
-    }.Schedule(grids.Length, 64).Complete();
+    }.Schedule(gridsAndOffsets.Length, 64).Complete();
 
-    grids.Dispose();
-    gridOffsets.Dispose();
+    gridsAndOffsets.Dispose();
 
     var vertexDictionary = new Dictionary<Vector3, int>(Vec3EqComparer.c);
     var triangles = new NativeList<int>(Allocator.TempJob);
@@ -190,15 +191,20 @@ public class TerrainGenerator : MonoBehaviour
     return AssetDatabase.LoadAssetAtPath<Mesh>(assetName);
   }
 
+  struct GridAndOffset
+  {
+    public Gridcell grid;
+
+    public Vector3Int offset;
+  }
+
   struct PolygoniseJob : IJobParallelFor
   {
-    [ReadOnly] public NativeArray<Gridcell> grids;
-    [ReadOnly] public NativeArray<Vector3Int> gridOffsets;
+    [ReadOnly] public NativeArray<GridAndOffset> gridsAndOffsets;
     [ReadOnly] public float isolevel;
-
     [WriteOnly] public NativeQueue<Triangle>.ParallelWriter trianglesMC;
 
-    public void Execute(int index) => trianglesMC.Enqueue(MarchingCubesCalc.Polygonise(grids[index], gridOffsets[index], isolevel));
+    public void Execute(int index) => trianglesMC.Enqueue(MarchingCubesCalc.Polygonise(gridsAndOffsets[index].grid, gridsAndOffsets[index].offset, isolevel));
   }
 
   struct GetUVJob : IJobParallelFor
