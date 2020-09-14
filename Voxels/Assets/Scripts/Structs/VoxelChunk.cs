@@ -132,9 +132,10 @@ public struct VoxelChunk
 
       if (!cube.Equals(Cube.one) && !cube.Equals(Cube.zero))
       {
-        NativeArray<Triangle> triangles = cube.Polygonise(isolevel);
+        var triangles = new NativeArray<Triangle>(5, Allocator.Temp);
+        int ntriang = cube.Polygonise(isolevel, triangles);
 
-        for (int i = 0; i < triangles.Length; i++)
+        for (int i = 0; i < ntriang; i++)
         {
           trianglesQueue.Enqueue(triangles[i]);
         }

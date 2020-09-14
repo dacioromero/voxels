@@ -9,7 +9,8 @@ using UnityEngine;
 [RequireComponent(typeof(MeshFilter), typeof(MeshCollider), typeof(MeshRenderer)), DisallowMultipleComponent, ExecuteInEditMode]
 public class TerrainGenerator : MonoBehaviour
 {
-  [SerializeField, Range(0, 1)] private float isolevel = 0.5f, persistence = 0.5f;
+  [SerializeField, Range(float.Epsilon, 1)] private float isolevel = 0.5f;
+  [SerializeField, Range(0, 1)] private float persistence = 0.5f;
   [SerializeField] private float noiseScale = 100, lacunarity = 2;
   [SerializeField] private int octaves = 16, seed;
 
