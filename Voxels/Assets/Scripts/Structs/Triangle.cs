@@ -2,19 +2,14 @@
 
 public struct Triangle
 {
-  public float3 vertex1;
-  public float3 vertex2;
-  public float3 vertex3;
+  public float3 v1;
+  public float3 v2;
+  public float3 v3;
 
-  public float3[] vertices
+  public Triangle(float3 v1, float3 v2, float3 v3)
   {
-    get => new float3[] { vertex1, vertex2, vertex3 };
-  }
-
-  public Triangle(float3 vertex1, float3 vertex2, float3 vertex3)
-  {
-    this.vertex1 = vertex1;
-    this.vertex2 = vertex2;
-    this.vertex3 = vertex3;
+    this.v1 = v1;
+    this.v2 = v2;
+    this.v3 = v3;
   }
 }

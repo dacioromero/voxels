@@ -90,6 +90,6 @@ public class TerrainGenerator : MonoBehaviour
     if (dimensions.z < 1)
       dimensions.z = 1;
 
-    Generate();
+    EditorApplication.delayCall += Generate;
   }
 }

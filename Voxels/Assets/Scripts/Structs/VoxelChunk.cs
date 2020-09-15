@@ -70,12 +70,12 @@ public struct VoxelChunk
 
     cubes.Dispose();
 
-    var vertexDictionary = new Dictionary<Vector3, int>(trianglesQueue.Count * 3, new Vector3EqualityComparer());
-    var triangleList = new List<int>(trianglesQueue.Count * 3);
+    var vertexDictionary = new Dictionary<Vector3, int>(trianglesQueue.Count, new Vector3EqualityComparer());
+    var triangles = new int[trianglesQueue.Count * 3];
 
-    while (trianglesQueue.TryDequeue(out Triangle triangle))
+    for (int i = 0; trianglesQueue.TryDequeue(out Triangle triangle); i += 3)
     {
-      foreach (Vector3 vertex in triangle.vertices)
+      int Dedupe(Vector3 vertex)
       {
         int vertexIndex;
 
@@ -85,14 +85,17 @@ public struct VoxelChunk
           vertexDictionary.Add(vertex, vertexIndex);
         }
 
-        triangleList.Add(vertexIndex);
+        return vertexIndex;
       }
+
+      triangles[i] = Dedupe(triangle.v1);
+      triangles[i + 1] = Dedupe(triangle.v2);
+      triangles[i + 2] = Dedupe(triangle.v3);
     }
 
     trianglesQueue.Dispose();
 
     Vector3[] vertices = vertexDictionary.Keys.ToArray();
-    int[] triangles = triangleList.ToArray();
     var uv = new Vector2[vertices.Length];
 
     for (int i = 0; i < uv.Length; i++)
@@ -100,13 +103,20 @@ public struct VoxelChunk
       uv[i] = new Vector2(vertices[i].x / dimensions.x, vertices[i].z / dimensions.z);
     }
 
-    return new Mesh()
+    var mesh = new Mesh()
     {
       name = $"Terrain{System.DateTime.UtcNow.ToFileTime().ToString()} Mesh",
       vertices = vertices,
       triangles = triangles,
       uv = uv,
     };
+
+    mesh.RecalculateBounds();
+    mesh.RecalculateNormals();
+    mesh.RecalculateTangents();
+    mesh.Optimize();
+
+    return mesh;
   }
 
   [BurstCompile]
